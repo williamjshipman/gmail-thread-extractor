@@ -139,7 +139,7 @@ namespace GMailThreadExtractor
                                         }
                                         // Save the message to the tar file
                                         // var outputEmlPath = message.UniqueId.ToString() + ".eml";
-                                        var outputEmlPath = $"{message.Envelope.From}_{message.Date.ToUniversalTime().ToString("yyyy-MM-dd_HH-mm-ss")}.eml";
+                                        var outputEmlPath = $"{folderEntry.Name}{message.Envelope.From}_{message.Date.ToUniversalTime().ToString("yyyy-MM-dd_HH-mm-ss")}.eml";
                                         var tarEntry = TarEntry.CreateTarEntry(outputEmlPath);
                                         tarEntry.Size = message.Size.HasValue ? message.Size.Value : mimeMessage.ToString().Length;
                                         tarEntry.ModTime = message.Date.UtcDateTime;
@@ -156,7 +156,7 @@ namespace GMailThreadExtractor
                                         {
                                             tarStream.CloseEntry();
                                         }
-                                        Console.WriteLine($"Saved to: {outputPath}/{folderEntry.Name}{outputEmlPath}");    
+                                        Console.WriteLine($"Saved to: {outputPath}/{outputEmlPath}");    
 
                                         Console.WriteLine();
                                     }
