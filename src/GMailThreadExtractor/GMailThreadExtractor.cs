@@ -7,6 +7,7 @@ using MimeKit;
 using ICSharpCode.SharpZipLib.Tar;
 using SevenZip;
 using System.Text;
+using ArchivalSupport;
 
 namespace GMailThreadExtractor
 {
@@ -92,93 +93,21 @@ namespace GMailThreadExtractor
                 {
                     outputPath = outputPath + ".tar.lzma";
                 }
-                SevenZip.Compression.LZMA.Encoder encoder = new SevenZip.Compression.LZMA.Encoder();
-                encoder.SetCoderProperties(
-                    [
-                        CoderPropID.Algorithm,
-                        CoderPropID.DictionarySize,
-                        CoderPropID.NumFastBytes,
-                        CoderPropID.MatchFinder,
-                        // CoderPropID.BlockSize
-                    ],
-                    [
-                        2, // LZMA algorithm, I hope.
-                        256*1024*1024, // 256 MB dictionary size.
-                        128, // Set fast bytes to 128 - improves compression.
-                        "BT4", // Use the "bt4" match finder.
-                        // 4*1024*1024 // 16 GB block size.
-                    ]);
-                using (var fileStream = File.Create(outputPath))
+
+                // Download the emails and save them in a new dictionary.
+                var emailDictionary = new Dictionary<ulong, List<MessageBlob>>();
+                foreach (var thread in threads)
                 {
-                    using (var memStream = new MemoryStream())
+                    emailDictionary[thread.Key] = new List<MessageBlob>();
+                    foreach (var message in thread.Value)
                     {
-                        using (var tarStream = new TarOutputStream(memStream, Encoding.UTF8))
-                        {
-                            foreach (var thread in threads)
-                            {
-                                string folderName = $"{thread.Key} {thread.Value[0].Envelope.Subject}/";
-                                var folderEntry = TarEntry.CreateTarEntry(folderName);
-                                tarStream.PutNextEntry(folderEntry);
-                                Console.WriteLine($"Thread ID: {thread.Key}");
-                                foreach (var message in thread.Value)
-                                {
-                                    try
-                                    {
-                                        Console.WriteLine($"Subject: {message.Envelope.Subject}");
-                                        Console.WriteLine($"From: {message.Envelope.From}");
-                                        Console.WriteLine($"To: {message.Envelope.To}");
-                                        Console.WriteLine($"Date: {message.Date}");
-                                        Console.WriteLine($"Size: {message.Size} bytes");
-                                        Console.WriteLine($"UID: {message.UniqueId}");
-
-                                        IMimeMessage? mimeMessage = await allMail.GetMessageAsync(message.UniqueId);
-                                        if (mimeMessage == null)
-                                        {
-                                            Console.WriteLine("Failed to retrieve message.");
-                                            continue;
-                                        }
-                                        // Save the message to the tar file
-                                        // var outputEmlPath = message.UniqueId.ToString() + ".eml";
-                                        var outputEmlPath = $"{folderEntry.Name}{message.Envelope.From}_{message.Date.ToUniversalTime().ToString("yyyy-MM-dd_HH-mm-ss")}.eml";
-                                        var tarEntry = TarEntry.CreateTarEntry(outputEmlPath);
-                                        tarEntry.Size = message.Size.HasValue ? message.Size.Value : mimeMessage.ToString().Length;
-                                        tarEntry.ModTime = message.Date.UtcDateTime;
-                                        tarStream.PutNextEntry(tarEntry);
-                                        try
-                                        {
-                                            mimeMessage.WriteTo(tarStream);
-                                        }
-                                        catch (Exception ex)
-                                        {
-                                            Console.WriteLine($"Error writing message to tar: {ex.Message}");
-                                        }
-                                        finally
-                                        {
-                                            tarStream.CloseEntry();
-                                        }
-                                        Console.WriteLine($"Saved to: {outputPath}/{outputEmlPath}");    
-
-                                        Console.WriteLine();
-                                    }
-                                    catch (Exception ex)
-                                    {
-                                        Console.WriteLine($"Error processing message: {ex.Message}");
-                                    }
-                                }
-                                tarStream.CloseEntry();
-                                Console.WriteLine($"Saved thread to: {outputPath}/{folderEntry.Name}");
-                            }
-                            await tarStream.FlushAsync();
-                            memStream.Seek(0, SeekOrigin.Begin);
-                            encoder.WriteCoderProperties(fileStream);
-                            Int64 fileSize = memStream.Length;
-                            for (int i = 0; i < 8; i++)
-                                fileStream.WriteByte((Byte)(fileSize >> (8 * i)));
-                            encoder.Code(memStream, fileStream, -1, -1, null);
-                            await fileStream.FlushAsync();
-                        }
+                        var mimeEmail = await allMail.GetMessageAsync(message.UniqueId);
+                        var email = MessageWriter.MessageToBlob(message, mimeEmail);
+                        emailDictionary[thread.Key].Add(email);
                     }
                 }
+
+                var compressor = new LZMACompressor();
             }
         }
     }
