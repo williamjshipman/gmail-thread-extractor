@@ -74,7 +74,7 @@ public class MessageBlob
     {
         get
         {
-            return $"{From}_{Date}.eml";
+            return $"{From}_{DateString}.eml";
         }
     }
 
