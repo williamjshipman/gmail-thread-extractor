@@ -1,8 +1,17 @@
 using System.Text;
 using ICSharpCode.SharpZipLib.Tar;
 
+/// <summary>
+/// Provides base functionality for compressing and archiving email threads.
+/// </summary>
 public class BaseCompressor
 {
+    /// <summary>
+    /// Writes the provided email threads to a tar archive stream, organizing messages by thread.
+    /// </summary>
+    /// <param name="outputPath">The output path for the archive file.</param>
+    /// <param name="tarStream">The tar output stream to write to.</param>
+    /// <param name="threads">A dictionary mapping thread IDs to lists of MessageBlob objects.</param>
     public static async Task WriteThreadsToTar(
         string outputPath,
         TarOutputStream tarStream,
@@ -50,7 +59,7 @@ public class BaseCompressor
             tarStream.CloseEntry();
             Console.WriteLine($"Saved thread to: {outputPath}/{folderEntry.Name}");
         }
-                    
+
         await tarStream.FlushAsync();
     }
 }

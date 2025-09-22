@@ -4,34 +4,66 @@ using SevenZip;
 
 namespace ArchivalSupport;
 
+/// <summary>
+/// Provides functionality to compress email threads using the LZMA algorithm.
+/// Inherits from <see cref="BaseCompressor"/> and uses SevenZip LZMA encoder to
+/// compress tar-archived email threads for efficient storage.
+/// </summary>
 public class LZMACompressor : BaseCompressor
 {
+    /// <summary>
+    /// The LZMA algorithm identifier.
+    /// </summary>
     private const int LZMA_ALGORITHM = 2; // LZMA algorithm
+
+    /// <summary>
+    /// The dictionary size for LZMA compression (256 MB).
+    /// </summary>
     private const int LZMA_DICTIONARY_SIZE = 256 * 1024 * 1024; // 256 MB dictionary size
+
+    /// <summary>
+    /// The number of fast bytes used by the LZMA encoder (128).
+    /// </summary>
     private const int LZMA_FAST_BYTES = 128; // Set fast bytes to 128 - improves compression
+
+    /// <summary>
+    /// The match finder algorithm used by LZMA ("BT4").
+    /// </summary>
     private const string LZMA_MATCH_FINDER = "BT4"; // Use the "bt4" match finder
 
+    /// <summary>
+    /// The LZMA encoder instance.
+    /// </summary>
     private SevenZip.Compression.LZMA.Encoder encoder;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="LZMACompressor"/> class and sets up encoder properties.
+    /// </summary>
     public LZMACompressor()
     {
         encoder = new SevenZip.Compression.LZMA.Encoder();
-                encoder.SetCoderProperties(
-                    [
-                        CoderPropID.Algorithm,
-                        CoderPropID.DictionarySize,
-                        CoderPropID.NumFastBytes,
-                        CoderPropID.MatchFinder
-                    ],
-                    [
-                        LZMA_ALGORITHM,
-                        LZMA_DICTIONARY_SIZE,
-                        LZMA_FAST_BYTES,
-                        LZMA_MATCH_FINDER
-                    ]);
+        encoder.SetCoderProperties(
+            [
+                CoderPropID.Algorithm,
+                CoderPropID.DictionarySize,
+                CoderPropID.NumFastBytes,
+                CoderPropID.MatchFinder
+            ],
+            [
+                LZMA_ALGORITHM,
+                LZMA_DICTIONARY_SIZE,
+                LZMA_FAST_BYTES,
+                LZMA_MATCH_FINDER
+            ]);
     }
 
-    public async void Compress(string outputPath, Dictionary<ulong, List<MessageBlob>> threads)
+    /// <summary>
+    /// Compresses the provided email threads into a tar archive and then applies LZMA compression.
+    /// </summary>
+    /// <param name="outputPath">The output file path for the compressed archive.</param>
+    /// <param name="threads">A dictionary mapping thread IDs to lists of <see cref="MessageBlob"/> objects.</param>
+    /// <returns>A task representing the asynchronous compression operation.</returns>
+    public async Task Compress(string outputPath, Dictionary<ulong, List<MessageBlob>> threads)
     {
         using (var fileStream = File.Create(outputPath))
         {

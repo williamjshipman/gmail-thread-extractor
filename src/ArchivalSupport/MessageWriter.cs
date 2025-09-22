@@ -1,6 +1,10 @@
 using MailKit;
 using MimeKit;
 
+/// <summary>
+/// Provides methods to convert MimeMessage objects and their summaries into MessageBlob objects,
+/// facilitating the serialization and storage of email messages with metadata.
+/// </summary>
 public class MessageWriter
 {
     /// <summary>
@@ -46,61 +50,65 @@ public class MessageWriter
         {
             messageBlobs.Add(MessageToBlob(msgSummary, message));
         }
-        return messageBlobs;
-    }
-}
-
+/// <summary>
+/// Represents an email message with metadata and its serialized content.
+/// Stores the unique identifier, subject, sender, recipient, date, and the raw message data.
+/// </summary>
 public class MessageBlob
-{
-    public string UniqueId { get; set; }
-    public byte[] Blob { get; set; }
-    public string Subject { get; set; }
-    public string From { get; set; }
-    public string To { get; set; }
-    public DateTime Date { get; set; }
-    public string DateString => 
-        Date.ToUniversalTime().ToString("yyyy-MM-dd_HH-mm-ss");
-    public long Size => (long)Blob.Length;
-
-    public string FileName
     {
-        get
+        public string UniqueId { get; set; }
+        public byte[] Blob { get; set; }
+        public string Subject { get; set; }
+        public string From { get; set; }
+        public string To { get; set; }
+        public DateTime Date { get; set; }
+        public string DateString =>
+            Date.ToUniversalTime().ToString("yyyy-MM-dd_HH-mm-ss");
+        public long Size => (long)Blob.Length;
+        public DateTime Date { get; set; }
+        public string DateString =>
+            Date.ToUniversalTime().ToString("yyyy-MM-dd_HH-mm-ss");
+        public long Size => (long)Blob.Length;
+
+        public string FileName
         {
-            return $"{From}_{Date}.eml";
+            get
+            {
+                /// <param name="blob">The message serialised to a binary blob.</param>
+            }
+        }
+
+        /// <summary>
+        /// Construct a new MessageBlob object.
+        /// </summary>
+        /// <param name="uniqueid">The unique ID of the message.</param>
+        /// <param name="blob">The message serialised to a binary blog.</param>
+        /// <param name="subject">The subject of the email.</param>
+        /// <param name="from">The sender of the email.</param>
+        /// <param name="to">The recipient of the email.</param>
+        /// <param name="date">The date the email was sent.</param>
+        public MessageBlob(string uniqueid, byte[] blob, string subject, string from, string to, DateTime date)
+        {
+            UniqueId = uniqueid;
+            Blob = blob;
+            Subject = subject;
+            From = from;
+            To = to;
+            Date = date;
+        }
+
+        /// <summary>
+        /// Override ToString method to provide a string representation of the
+        /// MessageBlob object.
+        /// </summary>
+        /// <returns>String representation.</returns>
+        public override string ToString()
+        {
+            return $"Subject: {Subject}\n" +
+                   $"From: {From}\n" +
+                   $"To: {To}\n" +
+                   $"Date: {Date}\n" +
+                   $"Size: {Size} bytes\n" +
+                   $"UID: {UniqueId}\n";
         }
     }
-
-    /// <summary>
-    /// Construct a new MessageBlob object.
-    /// </summary>
-    /// <param name="uniqueid">The unique ID of the message.</param>
-    /// <param name="blob">The message serialised to a binary blog.</param>
-    /// <param name="subject">The subject of the email.</param>
-    /// <param name="from">The sender of the email.</param>
-    /// <param name="to">The recipient of the email.</param>
-    /// <param name="date">The date the email was sent.</param>
-    public MessageBlob(string uniqueid, byte[] blob, string subject, string from, string to, DateTime date)
-    {
-        UniqueId = uniqueid;
-        Blob = blob;
-        Subject = subject;
-        From = from;
-        To = to;
-        Date = date;
-    }
-
-    /// <summary>
-    /// Override ToString method to provide a string representation of the
-    /// MessageBlob object.
-    /// </summary>
-    /// <returns>String representation.</returns>
-    public override string ToString()
-    {
-        return $"Subject: {Subject}\n" +
-               $"From: {From}\n" +
-               $"To: {To}\n" +
-               $"Date: {Date}\n" +
-               $"Size: {Size} bytes\n" +
-               $"UID: {UniqueId}\n";
-    }
-}
