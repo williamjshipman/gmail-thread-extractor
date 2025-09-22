@@ -84,7 +84,7 @@ namespace ArchivalSupport
         /// Construct a new MessageBlob object.
         /// </summary>
         /// <param name="uniqueid">The unique ID of the message.</param>
-        /// <param name="blob">The message serialised to a binary blog.</param>
+        /// <param name="blob">The message serialised to a binary blob.</param>
         /// <param name="subject">The subject of the email.</param>
         /// <param name="from">The sender of the email.</param>
         /// <param name="to">The recipient of the email.</param>
