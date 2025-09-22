@@ -67,29 +67,27 @@ public class LZMACompressor : BaseCompressor
     {
         using (var fileStream = File.Create(outputPath))
         {
-            using (var memStream = new MemoryStream())
+            using (var tempTarFileStream = new FileStream("temp.tar", FileMode.Create, FileAccess.Write))
             {
-                using (var tarStream = new TarOutputStream(memStream, Encoding.UTF8))
+                using (var tarStream = new TarOutputStream(tempTarFileStream, Encoding.UTF8))
                 {
                     await WriteThreadsToTar(outputPath, tarStream, threads);
-                    // Need to go back to the beginning of the memory stream.
-                    // encoder.Code will read from the current position in the
-                    // stream to the end, so we need to reset it to the
-                    // beginning.
-                    memStream.Seek(0, SeekOrigin.Begin);
-
-                    // Write the LZMA properties to the file stream.
-                    encoder.WriteCoderProperties(fileStream);
-                    // Now write the size of the uncompressed data.
-                    Int64 fileSize = memStream.Length;
-                    for (int i = 0; i < 8; i++)
-                        fileStream.WriteByte((Byte)(fileSize >> (8 * i)));
-                    // Finally the header info has been written, now we can
-                    // compress the data.
-                    encoder.Code(memStream, fileStream, -1, -1, null);
-                    // Flush for good measure.
-                    await fileStream.FlushAsync();
                 }
+            }
+            // Closing the temporary tar stream to ensure all data is written.
+            using (var tempTarFileStream = new FileStream("temp.tar", FileMode.Open, FileAccess.Read))
+            {
+                // Write the LZMA properties to the file stream.
+                encoder.WriteCoderProperties(fileStream);
+                // Now write the size of the uncompressed data.
+                Int64 fileSize = tempTarFileStream.Length;
+                for (int i = 0; i < 8; i++)
+                    fileStream.WriteByte((Byte)(fileSize >> (8 * i)));
+                // Finally the header info has been written, now we can
+                // compress the data.
+                encoder.Code(tempTarFileStream, fileStream, -1, -1, null);
+                // Flush for good measure.
+                await fileStream.FlushAsync();
             }
         }
     }

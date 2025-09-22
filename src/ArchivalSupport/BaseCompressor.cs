@@ -37,7 +37,7 @@ public class BaseCompressor
                     tarStream.PutNextEntry(tarEntry);
                     try
                     {
-                        tarStream.Write(message.Blob);
+                        await tarStream.WriteAsync(message.Blob);
                     }
                     catch (Exception ex)
                     {
