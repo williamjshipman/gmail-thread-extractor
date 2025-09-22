@@ -43,16 +43,16 @@ cd gmail-thread-extractor
 dotnet run --project .\src\GMailThreadExtractor\ --email <email> --password <app password> --search "<search terms>" --output <output file>
 ```
 
-Replace `<email>` with your GMail email address, `<app password>` with the app password you generated, `<search terms>` with the search terms you want to use to find the thread, and `<output file>` with the path to the file where you want to save the threads that were found.
+Replace `<email>` with your GMail email address, `<app password>` with the app password you generated, `<search terms>` with the search terms you want to use to find the thread, and `<output file>` with the path to the file where you want to save the threads that were found. `--email` and `--password` are optional arguments. If not provided you will be prompted to enter them. `--search` and `--output` are required arguments.
 
 ## Features
 
 As of now, the tool has the following small set of features:
 
-✅ Download all email threads that match a given search term and/or label from your GMail account.
-✅ Save the messages as .eml files in a compressed file (tar.lzma).
-✅ Uses 7zip LZMA compression to save space.
-✅ Each thread is saved in a separate folder in the archive.
+:white_check_mark: Download all email threads that match a given search term and/or label from your GMail account.\
+:white_check_mark: Save the messages as .eml files in a compressed file (tar.lzma).\
+:white_check_mark: Uses 7zip LZMA compression to save space.\
+:white_check_mark: Each thread is saved in a separate folder in the archive.
 
 ## Roadmap
 
@@ -76,6 +76,7 @@ The project is split into src and test folders. The src folder contains the sour
 The src folder contains the following subfolders:
 
 - GMailThreadExtractor: The main executable project folder, containing the source code for the project.
+- ArchivalSupport: Contains classes for compressing and archiving email threads.
 
 ## Contributing
 
