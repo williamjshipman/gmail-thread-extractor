@@ -7,7 +7,7 @@ namespace GMailThreadExtractor
     /// <summary>
     /// Hosts the application entry point and orchestrates command-line handling for the Gmail thread extractor.
     /// </summary>
-    class Program
+    public static class Program
     {
         /// <summary>
         /// Entry point that builds the command-line interface and invokes the extraction workflow.
@@ -18,29 +18,34 @@ namespace GMailThreadExtractor
         {
             var emailOption = new Option<string>(
                 name: "--email",
-                description: "The email address to use for authentication.") {
-                    IsRequired = false
-                };
+                description: "The email address to use for authentication.")
+            {
+                IsRequired = false
+            };
             var passwordOption = new Option<string>(
                 name: "--password",
-                description: "The password to use for authentication.") {
-                    IsRequired = false
-                };
+                description: "The password to use for authentication.")
+            {
+                IsRequired = false
+            };
             var searchOption = new Option<string>(
                 name: "--search",
-                description: "The search query to filter emails.") {
-                    IsRequired = false
-                };
+                description: "The search query to filter emails.")
+            {
+                IsRequired = false
+            };
             var labelOption = new Option<string>(
                 name: "--label",
-                description: "The label to filter emails.") {
-                    IsRequired = false
-                };
+                description: "The label to filter emails.")
+            {
+                IsRequired = false
+            };
             var outputOption = new Option<string>(
                 name: "--output",
-                description: "The output file path.") {
-                    IsRequired = true
-                };
+                description: "The output file path.")
+            {
+                IsRequired = true
+            };
             var rootCommand = new RootCommand("Extracts email threads from a Gmail account.")
             {
                 emailOption,
@@ -57,7 +62,7 @@ namespace GMailThreadExtractor
 
                 var extractor = new GMailThreadExtractor(email, password, "imap.gmail.com", 993);
                 await extractor.ExtractThreadsAsync(output, search, label);
-            }, 
+            },
             emailOption, passwordOption, searchOption, labelOption, outputOption);
 
             return await rootCommand.InvokeAsync(args);
