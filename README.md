@@ -49,10 +49,10 @@ Replace `<email>` with your GMail email address, `<app password>` with the app p
 
 As of now, the tool has the following small set of features:
 
-- Download all email threads that match a given search term and/or label from your GMail account.
-- Save the messages as .eml files in a compressed file (tar.lzma).
-- Uses 7zip LZMA compression to save space.
-- Each thread is saved in a separate folder in the archive.
+✅ Download all email threads that match a given search term and/or label from your GMail account.
+✅ Save the messages as .eml files in a compressed file (tar.lzma).
+✅ Uses 7zip LZMA compression to save space.
+✅ Each thread is saved in a separate folder in the archive.
 
 ## Roadmap
 
@@ -60,7 +60,7 @@ The following features and modifications are planned for the future:
 
 - [ ] Add support for Zip and tar.gz compression formats, for those who can't/won't use 7zip.
 - [ ] Add support for tar.xz format.
-- [ ] Get propper .7z support working, at the moment the 7zip SDK is used to create tar.lzma files.
+- [ ] Get proper .7z support working, at the moment the 7zip SDK is used to create tar.lzma files.
 - [ ] Add support for OAuth2 authentication, although a low priority since the config is a pain.
 - [ ] Clean up the code, splitting it into smaller classes.
 - [ ] Add unit tests.
@@ -79,4 +79,4 @@ The src folder contains the following subfolders:
 
 ## Contributing
 
-Contributions are welcome, please fork the repository and create a pull request. Please log issues for bugs, suggestions, feature requests, etc.  However, given my limited time to work on side projects, I make no guarantees that I will respond to issues in a timely manner.
+Contributions are welcome, please fork the repository and create a pull request. Please log issues for bugs, suggestions, feature requests, etc. However, given my limited time to work on side projects, I make no guarantees that I will respond to issues in a timely manner.
