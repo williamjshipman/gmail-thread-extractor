@@ -108,6 +108,8 @@ namespace GMailThreadExtractor
                 }
 
                 var compressor = new LZMACompressor();
+                compressor.Compress(outputPath, emailDictionary);
+                Console.WriteLine($"All done! Emails saved to {outputPath}");
             }
         }
     }
