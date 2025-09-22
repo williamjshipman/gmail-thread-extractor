@@ -76,7 +76,6 @@ namespace GMailThreadExtractor
                         {
                             continue; // Skip if we already have this thread.
                         }
-                        //var threadList = threads.TryGetValue(threadId, out var threadMessages) ? threadMessages : null;
                         var threadUuids = await allMail.SearchAsync(SearchQuery.All.And(SearchQuery.GMailThreadId(threadId)));
                         var threadList = await allMail.FetchAsync(threadUuids,
                             MessageSummaryItems.BodyStructure |
