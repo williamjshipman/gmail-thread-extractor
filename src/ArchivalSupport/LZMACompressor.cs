@@ -65,9 +65,10 @@ public class LZMACompressor : BaseCompressor
     /// <returns>A task representing the asynchronous compression operation.</returns>
     public async Task Compress(string outputPath, Dictionary<ulong, List<MessageBlob>> threads)
     {
+        string sTempTarFilePath = Path.GetTempFileName();
         using (var fileStream = File.Create(outputPath))
         {
-            using (var tempTarFileStream = new FileStream("temp.tar", FileMode.Create, FileAccess.Write))
+            using (var tempTarFileStream = new FileStream(sTempTarFilePath, FileMode.Create, FileAccess.Write))
             {
                 using (var tarStream = new TarOutputStream(tempTarFileStream, Encoding.UTF8))
                 {
@@ -75,7 +76,7 @@ public class LZMACompressor : BaseCompressor
                 }
             }
             // Closing the temporary tar stream to ensure all data is written.
-            using (var tempTarFileStream = new FileStream("temp.tar", FileMode.Open, FileAccess.Read))
+            using (var tempTarFileStream = new FileStream(sTempTarFilePath, FileMode.Open, FileAccess.Read))
             {
                 // Write the LZMA properties to the file stream.
                 encoder.WriteCoderProperties(fileStream);
@@ -90,5 +91,7 @@ public class LZMACompressor : BaseCompressor
                 await fileStream.FlushAsync();
             }
         }
+        // Delete the temporary tar file.
+        File.Delete(sTempTarFilePath);
     }
 }
