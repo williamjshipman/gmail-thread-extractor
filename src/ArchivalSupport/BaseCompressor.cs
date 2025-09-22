@@ -1,10 +1,12 @@
 using System.Text;
 using ICSharpCode.SharpZipLib.Tar;
 
+namespace ArchivalSupport;
+
 /// <summary>
 /// Provides base functionality for compressing and archiving email threads.
 /// </summary>
-public class BaseCompressor
+public static class BaseCompressor
 {
     /// <summary>
     /// Writes the provided email threads to a tar archive stream, organizing messages by thread.
