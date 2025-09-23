@@ -52,6 +52,20 @@ namespace GMailThreadExtractor
             {
                 IsRequired = false
             };
+            var compressionOption = new Option<string>(
+                name: "--compression",
+                description: "The compression method to use (lzma or gzip). Default is lzma.")
+            {
+                IsRequired = false
+            };
+            compressionOption.AddValidator(result =>
+            {
+                var value = result.GetValueOrDefault<string>();
+                if (!string.IsNullOrEmpty(value) && value != "lzma" && value != "gzip")
+                {
+                    result.ErrorMessage = "Compression method must be either 'lzma' or 'gzip'.";
+                }
+            });
             var rootCommand = new RootCommand("Extracts email threads from a Gmail account.")
             {
                 configOption,
@@ -59,10 +73,11 @@ namespace GMailThreadExtractor
                 passwordOption,
                 searchOption,
                 labelOption,
-                outputOption
+                outputOption,
+                compressionOption
             };
 
-            rootCommand.SetHandler(async (configPath, email, password, search, label, output) =>
+            rootCommand.SetHandler(async (configPath, email, password, search, label, output, compression) =>
             {
                 // Load config file if specified
                 var config = new Config();
@@ -91,7 +106,7 @@ namespace GMailThreadExtractor
                 }
 
                 // Merge config with command line arguments (command line takes precedence)
-                var finalConfig = config.MergeWithCommandLine(email, password, search, label, output);
+                var finalConfig = config.MergeWithCommandLine(email, password, search, label, output, compression);
 
                 // Validate required parameters and prompt if needed
                 finalConfig.Email = string.IsNullOrWhiteSpace(finalConfig.Email) ? PromptForEmail() : finalConfig.Email;
@@ -108,9 +123,9 @@ namespace GMailThreadExtractor
                 }
 
                 var extractor = new GMailThreadExtractor(finalConfig.Email, finalConfig.Password, "imap.gmail.com", 993);
-                await extractor.ExtractThreadsAsync(finalConfig.Output, finalConfig.Search, finalConfig.Label ?? string.Empty);
+                await extractor.ExtractThreadsAsync(finalConfig.Output, finalConfig.Search, finalConfig.Label ?? string.Empty, finalConfig.Compression ?? "lzma");
             },
-            configOption, emailOption, passwordOption, searchOption, labelOption, outputOption);
+            configOption, emailOption, passwordOption, searchOption, labelOption, outputOption, compressionOption);
 
             return await rootCommand.InvokeAsync(args);
         }
