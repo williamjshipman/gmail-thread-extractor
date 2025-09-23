@@ -8,7 +8,6 @@ namespace ArchivalSupport;
 internal static class SafeNameBuilder
 {
     private const int MaxSegmentLength = 80;
-    private const int MaxFileNameLength = 120;
     private const int MaxTarNameLength = 100; // USTAR name field limit
     private static readonly HashSet<char> InvalidCharacters;
 
@@ -75,12 +74,13 @@ internal static class SafeNameBuilder
         var safeSubject = Sanitize(subject, "thread");
 
         const string delimiter = "_";
-        var availableForSubject = MaxTarNameLength - threadSegment.Length - delimiter.Length;
+        var bareMaxLength = MaxTarNameLength - 1; // reserve space for the trailing slash added to tar entries
+        var availableForSubject = bareMaxLength - threadSegment.Length - delimiter.Length;
 
         string name;
         if (availableForSubject <= 0)
         {
-            name = threadSegment;
+            name = threadSegment.Length > bareMaxLength ? threadSegment[..bareMaxLength] : threadSegment;
         }
         else
         {
@@ -92,18 +92,17 @@ internal static class SafeNameBuilder
             name = $"{threadSegment}{delimiter}{safeSubject}";
         }
 
-        if (name.Length > MaxTarNameLength)
+        if (name.Length > bareMaxLength)
         {
-            name = name[..MaxTarNameLength];
+            name = name[..bareMaxLength];
         }
 
         return name;
     }
-
     public static string BuildMessageFileName(string uniqueId, string? subject, string dateSegment)
     {
         const string Extension = ".eml";
-        var coreMaxLength = MaxFileNameLength - Extension.Length;
+        var coreMaxLength = MaxTarNameLength - Extension.Length;
 
         var safeUid = Sanitize(uniqueId, "uid", enforceLength: false);
         var safeDate = Sanitize(dateSegment, "date");
@@ -140,3 +139,5 @@ internal static class SafeNameBuilder
         return $"{core}{Extension}";
     }
 }
+
+
