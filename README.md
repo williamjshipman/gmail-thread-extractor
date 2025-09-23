@@ -52,6 +52,16 @@ Replace `<email>` with your GMail email address, `<app password>` with the app p
 - `--config` is optional - specify a JSON configuration file path
 - `--label` is optional - filter by Gmail label
 
+## Testing
+
+Run the unit suite from the repository root:
+
+```bash
+dotnet test
+```
+
+This executes the xUnit project under `test/ArchivalSupport.Tests`, which validates the archive naming and sanitization helpers. Add future suites alongside it and keep tests hermetic (no live network or filesystem writes outside temp locations).
+
 ## Configuration File
 
 You can use a JSON configuration file to provide default values for command-line arguments. Command-line arguments will override config file values.
@@ -82,14 +92,13 @@ dotnet run --project .\src\GMailThreadExtractor\ --config config.json
 
 ## Features
 
-As of now, the tool has the following small set of features:
-
 :white_check_mark: Download all email threads that match a given search term and/or label from your GMail account.\
 :white_check_mark: Save the messages as .eml files in compressed archives (tar.lzma or tar.gz).\
 :white_check_mark: Multiple compression options: LZMA (7zip) or Gzip compression.\
 :white_check_mark: Each thread is saved in a separate folder in the archive.\
 :white_check_mark: JSON configuration file support for default settings.\
-:white_check_mark: Command-line options take precedence over configuration files.
+:white_check_mark: Command-line options take precedence over configuration files.\
+:white_check_mark: Sanitized archive names remain portable across operating systems.
 
 ## Roadmap
 
@@ -100,7 +109,7 @@ The following features and modifications are planned for the future:
 - [ ] Get proper .7z support working, at the moment the 7zip SDK is used to create tar.lzma files.
 - [ ] Add support for OAuth2 authentication, although a low priority since the config is a pain.
 - [x] Clean up the code, splitting it into smaller classes.
-- [ ] Add unit tests.
+- [x] Add initial unit tests for archive naming and sanitization.
 - [ ] CI/CD pipeline using GitHub Actions - one day...
 
 ## License
@@ -109,11 +118,11 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 
 ## Project structure
 
-The project is split into src and test folders. The src folder contains the source code for the project, and the test folder contains the unit tests for the project. At the moment there are no unit tests, but they will be added in the future.
-The src folder contains the following subfolders:
+The project is split into `src/` and `test/` folders. The `src/` folder contains the production code, and the `test/` folder houses xUnit projects.
 
-- GMailThreadExtractor: The main executable project folder, containing the source code for the project.
-- ArchivalSupport: Contains classes for compressing and archiving email threads.
+- `src/GMailThreadExtractor`: The main executable project folder containing the CLI and configuration utilities.
+- `src/ArchivalSupport`: Compression and archival helpers, including the path-sanitization utilities.
+- `test/ArchivalSupport.Tests`: xUnit suite that exercises `SafeNameBuilder` and future archival helpers.
 
 ## Contributing
 
