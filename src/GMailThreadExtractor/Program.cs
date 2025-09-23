@@ -16,6 +16,12 @@ namespace GMailThreadExtractor
         /// <returns>The process exit code produced by System.CommandLine.</returns>
         static async Task<int> Main(string[] args)
         {
+            var configOption = new Option<string>(
+                name: "--config",
+                description: "Path to the JSON configuration file.")
+            {
+                IsRequired = false
+            };
             var emailOption = new Option<string>(
                 name: "--email",
                 description: "The email address to use for authentication.")
@@ -44,10 +50,11 @@ namespace GMailThreadExtractor
                 name: "--output",
                 description: "The output file path.")
             {
-                IsRequired = true
+                IsRequired = false
             };
             var rootCommand = new RootCommand("Extracts email threads from a Gmail account.")
             {
+                configOption,
                 emailOption,
                 passwordOption,
                 searchOption,
@@ -55,15 +62,55 @@ namespace GMailThreadExtractor
                 outputOption
             };
 
-            rootCommand.SetHandler(async (email, password, search, label, output) =>
+            rootCommand.SetHandler(async (configPath, email, password, search, label, output) =>
             {
-                email = string.IsNullOrWhiteSpace(email) ? PromptForEmail() : email;
-                password = string.IsNullOrEmpty(password) ? PromptForPassword() : password;
+                // Load config file if specified
+                var config = new Config();
+                if (!string.IsNullOrWhiteSpace(configPath))
+                {
+                    config = await Config.LoadFromFileAsync(configPath);
+                }
+                else
+                {
+                    // Try to load from default config file locations
+                    var defaultConfigPaths = new[]
+                    {
+                        "config.json",
+                        "gmail-extractor.json",
+                        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".gmail-extractor.json")
+                    };
 
-                var extractor = new GMailThreadExtractor(email, password, "imap.gmail.com", 993);
-                await extractor.ExtractThreadsAsync(output, search, label);
+                    foreach (var defaultPath in defaultConfigPaths)
+                    {
+                        if (File.Exists(defaultPath))
+                        {
+                            config = await Config.LoadFromFileAsync(defaultPath);
+                            break;
+                        }
+                    }
+                }
+
+                // Merge config with command line arguments (command line takes precedence)
+                var finalConfig = config.MergeWithCommandLine(email, password, search, label, output);
+
+                // Validate required parameters and prompt if needed
+                finalConfig.Email = string.IsNullOrWhiteSpace(finalConfig.Email) ? PromptForEmail() : finalConfig.Email;
+                finalConfig.Password = string.IsNullOrWhiteSpace(finalConfig.Password) ? PromptForPassword() : finalConfig.Password;
+
+                if (string.IsNullOrWhiteSpace(finalConfig.Output))
+                {
+                    throw new ArgumentException("Output file path is required. Specify --output or include 'output' in config file.");
+                }
+
+                if (string.IsNullOrWhiteSpace(finalConfig.Search))
+                {
+                    throw new ArgumentException("Search query is required. Specify --search or include 'search' in config file.");
+                }
+
+                var extractor = new GMailThreadExtractor(finalConfig.Email, finalConfig.Password, "imap.gmail.com", 993);
+                await extractor.ExtractThreadsAsync(finalConfig.Output, finalConfig.Search, finalConfig.Label ?? string.Empty);
             },
-            emailOption, passwordOption, searchOption, labelOption, outputOption);
+            configOption, emailOption, passwordOption, searchOption, labelOption, outputOption);
 
             return await rootCommand.InvokeAsync(args);
         }

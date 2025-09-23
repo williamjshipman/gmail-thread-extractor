@@ -1,0 +1,10 @@
+{
+  // Example configuration file for Gmail Thread Extractor
+  // Copy this file to config.json and modify the values as needed
+
+  "email": "your-email@gmail.com",
+  "password": "your-app-password",
+  "search": "from:important-sender@example.com",
+  "label": "Important",
+  "output": "extracted-emails.tar.lzma"
+}
