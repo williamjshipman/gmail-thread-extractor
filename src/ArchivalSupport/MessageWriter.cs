@@ -25,9 +25,9 @@ namespace ArchivalSupport
                 return new MessageBlob(
                     msgSummary.UniqueId.ToString(), // UniqueId is only available in the summary, not MimeMessage.
                     memoryStream.ToArray(),
-                    message.Subject,
-                    message.From.ToString(),
-                    message.To.ToString(),
+                    message.Subject ?? string.Empty,
+                    message.From?.ToString() ?? string.Empty,
+                    message.To?.ToString() ?? string.Empty,
                     message.Date.UtcDateTime);
             }
         }
@@ -72,13 +72,7 @@ namespace ArchivalSupport
             Date.ToUniversalTime().ToString("yyyy-MM-dd_HH-mm-ss");
         public long Size => (long)Blob.Length;
 
-        public string FileName
-        {
-            get
-            {
-                return $"{From}_{DateString}.eml";
-            }
-        }
+        public string FileName => SafeNameBuilder.BuildMessageFileName(UniqueId, Subject, DateString);
 
         /// <summary>
         /// Construct a new MessageBlob object.
