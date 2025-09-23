@@ -106,7 +106,7 @@ public class LZMACompressor : ICompressor
             }
             catch (Exception ex2)
             {
-                Console.WriteLine($"Warning: Unable to delete temporary file {outputPath}. {ex2.Message}");
+                Console.WriteLine($"Warning: Unable to delete output file {outputPath}. {ex2.Message}");
             }
         }
         finally

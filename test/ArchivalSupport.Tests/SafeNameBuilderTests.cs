@@ -47,7 +47,7 @@ public class SafeNameBuilderTests
         var longSubject = new string('b', 200);
         var fileName = SafeNameBuilder.BuildMessageFileName(new string('u', 200), longSubject, "2025-01-01_00-00-00");
 
-        Assert.True(fileName.Length <= 100); Console.WriteLine(fileName);
+        Assert.True(fileName.Length <= 100);
         Assert.StartsWith(new string('u', 60) + "_2025-01-01_00-00-00", fileName);
     }
 }
