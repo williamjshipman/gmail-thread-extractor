@@ -7,7 +7,7 @@ namespace ArchivalSupport;
 
 internal static class SafeNameBuilder
 {
-    private const int MaxSegmentLength = 80;
+    private const int MaxSegmentLength = 60;
     private const int MaxTarNameLength = 100; // USTAR name field limit
     private static readonly HashSet<char> InvalidCharacters;
 
