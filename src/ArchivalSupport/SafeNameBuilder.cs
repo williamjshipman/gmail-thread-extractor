@@ -99,6 +99,7 @@ internal static class SafeNameBuilder
 
         return name;
     }
+
     public static string BuildMessageFileName(string uniqueId, string? subject, string dateSegment)
     {
         const string Extension = ".eml";
@@ -139,5 +140,3 @@ internal static class SafeNameBuilder
         return $"{core}{Extension}";
     }
 }
-
-
