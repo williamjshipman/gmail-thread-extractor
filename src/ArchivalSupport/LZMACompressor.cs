@@ -65,33 +65,62 @@ public class LZMACompressor : ICompressor
     /// <returns>A task representing the asynchronous compression operation.</returns>
     public async Task Compress(string outputPath, Dictionary<ulong, List<MessageBlob>> threads)
     {
-        string sTempTarFilePath = Path.GetRandomFileName();
-        using (var fileStream = File.Create(outputPath))
+        string sTempTarFilePath = Path.Join(Path.GetTempPath(), Path.GetRandomFileName());
+        try
         {
-            using (var tempTarFileStream = new FileStream(sTempTarFilePath, FileMode.Create, FileAccess.Write))
+            using (var fileStream = File.Create(outputPath))
             {
-                using (var tarStream = new TarOutputStream(tempTarFileStream, Encoding.UTF8))
+                using (var tempTarFileStream = new FileStream(sTempTarFilePath, FileMode.Create, FileAccess.Write))
                 {
-                    await BaseCompressor.WriteThreadsToTar(outputPath, tarStream, threads);
+                    using (var tarStream = new TarOutputStream(tempTarFileStream, Encoding.UTF8))
+                    {
+                        await BaseCompressor.WriteThreadsToTar(outputPath, tarStream, threads);
+                    }
+                }
+                // Closing the temporary tar stream to ensure all data is written.
+                using (var tempTarFileStream = new FileStream(sTempTarFilePath, FileMode.Open, FileAccess.Read))
+                {
+                    // Write the LZMA properties to the file stream.
+                    encoder.WriteCoderProperties(fileStream);
+                    // Now write the size of the uncompressed data.
+                    Int64 fileSize = tempTarFileStream.Length;
+                    for (int i = 0; i < 8; i++)
+                        fileStream.WriteByte((Byte)(fileSize >> (8 * i)));
+                    // Finally the header info has been written, now we can
+                    // compress the data.
+                    encoder.Code(tempTarFileStream, fileStream, -1, -1, null);
+                    // Flush for good measure.
+                    await fileStream.FlushAsync();
                 }
             }
-            // Closing the temporary tar stream to ensure all data is written.
-            using (var tempTarFileStream = new FileStream(sTempTarFilePath, FileMode.Open, FileAccess.Read))
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error during compression: {ex.Message}");
+            try
             {
-                // Write the LZMA properties to the file stream.
-                encoder.WriteCoderProperties(fileStream);
-                // Now write the size of the uncompressed data.
-                Int64 fileSize = tempTarFileStream.Length;
-                for (int i = 0; i < 8; i++)
-                    fileStream.WriteByte((Byte)(fileSize >> (8 * i)));
-                // Finally the header info has been written, now we can
-                // compress the data.
-                encoder.Code(tempTarFileStream, fileStream, -1, -1, null);
-                // Flush for good measure.
-                await fileStream.FlushAsync();
+                // Delete the output tar.lzma file if it exists.
+                // The file may be partially written or corrupted.
+                if (File.Exists(outputPath))
+                    File.Delete(outputPath);
+            }
+            catch (Exception ex2)
+            {
+                Console.WriteLine($"Warning: Unable to delete temporary file {outputPath}. {ex2.Message}");
             }
         }
-        // Delete the temporary tar file.
-        File.Delete(sTempTarFilePath);
+        finally
+        {
+            try
+            {
+                // Delete the temporary tar file.
+                if (File.Exists(sTempTarFilePath))
+                    File.Delete(sTempTarFilePath);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Warning: Unable to delete temporary file {sTempTarFilePath}. {ex.Message}");
+            }
+        }
     }
 }
