@@ -34,6 +34,11 @@ namespace GMailThreadExtractor
         public string? Output { get; set; }
 
         /// <summary>
+        /// The compression method to use (lzma or gzip).
+        /// </summary>
+        public string? Compression { get; set; }
+
+        /// <summary>
         /// Loads configuration from a JSON file.
         /// </summary>
         /// <param name="configPath">The path to the JSON config file.</param>
@@ -74,8 +79,9 @@ namespace GMailThreadExtractor
         /// <param name="cmdSearch">Command-line search value.</param>
         /// <param name="cmdLabel">Command-line label value.</param>
         /// <param name="cmdOutput">Command-line output value.</param>
+        /// <param name="cmdCompression">Command-line compression value.</param>
         /// <returns>A new Config object with merged values.</returns>
-        public Config MergeWithCommandLine(string? cmdEmail, string? cmdPassword, string? cmdSearch, string? cmdLabel, string? cmdOutput)
+        public Config MergeWithCommandLine(string? cmdEmail, string? cmdPassword, string? cmdSearch, string? cmdLabel, string? cmdOutput, string? cmdCompression)
         {
             return new Config
             {
@@ -83,7 +89,8 @@ namespace GMailThreadExtractor
                 Password = !string.IsNullOrWhiteSpace(cmdPassword) ? cmdPassword : Password,
                 Search = !string.IsNullOrWhiteSpace(cmdSearch) ? cmdSearch : Search,
                 Label = !string.IsNullOrWhiteSpace(cmdLabel) ? cmdLabel : Label,
-                Output = !string.IsNullOrWhiteSpace(cmdOutput) ? cmdOutput : Output
+                Output = !string.IsNullOrWhiteSpace(cmdOutput) ? cmdOutput : Output,
+                Compression = !string.IsNullOrWhiteSpace(cmdCompression) ? cmdCompression : Compression
             };
         }
     }

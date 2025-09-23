@@ -6,5 +6,6 @@
   "password": "your-app-password",
   "search": "from:important-sender@example.com",
   "label": "Important",
-  "output": "extracted-emails.tar.lzma"
+  "output": "extracted-emails",
+  "compression": "lzma"
 }

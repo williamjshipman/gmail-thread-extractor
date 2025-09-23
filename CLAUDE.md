@@ -17,11 +17,12 @@ dotnet build
 ### Running the application
 
 ```bash
-dotnet run --project .\src\GMailThreadExtractor\ --email <email> --password <app_password> --search "<search_terms>" --output <output_file>
+dotnet run --project .\src\GMailThreadExtractor\ --email <email> --password <app_password> --search "<search_terms>" --output <output_file> --compression <lzma|gzip>
 ```
 
 The `--email` and `--password` parameters are optional (user will be prompted if not provided).
 The `--search` and `--output` parameters are required.
+The `--compression` parameter is optional (defaults to "lzma").
 
 ### Configuration File Support
 
@@ -46,9 +47,12 @@ Example config file format:
   "password": "your-app-password",
   "search": "from:important-sender@example.com",
   "label": "Important",
-  "output": "extracted-emails.tar.lzma"
+  "output": "extracted-emails",
+  "compression": "lzma"
 }
 ```
+
+The `compression` field accepts either "lzma" (default) or "gzip". The appropriate file extension (.tar.lzma or .tar.gz) will be automatically appended to the output filename if not already present.
 
 ### Solution structure
 
@@ -68,8 +72,10 @@ The solution contains two main projects:
    - `ArgumentParser.cs` - Currently empty, command-line parsing is handled in Program.cs
 
 2. **ArchivalSupport** (`src/ArchivalSupport/`) - Library for compression and archival
+   - `ICompressor.cs` - Interface defining the compression contract for all compressor implementations
    - `BaseCompressor.cs` - Static methods for writing email threads to tar archives
-   - `LZMACompressor.cs` - LZMA compression implementation using SevenZip LZMA encoder
+   - `LZMACompressor.cs` - LZMA compression implementation using SevenZip LZMA encoder (implements ICompressor)
+   - `TarGzipCompressor.cs` - Gzip compression implementation using SharpZipLib (implements ICompressor)
    - `MessageWriter.cs` - Converts MailKit messages to MessageBlob objects for serialization
 
 ### Key Dependencies
@@ -87,8 +93,8 @@ The solution contains two main projects:
 3. Searches for emails using Gmail search queries and/or labels
 4. Groups messages by Gmail thread ID
 5. Downloads full message content and converts to `MessageBlob` objects
-6. `LZMACompressor` creates tar archive and applies LZMA compression
-7. Output saved as `.tar.lzma` file
+6. Selected compressor (LZMA or Gzip) creates tar archive and applies compression
+7. Output saved as `.tar.lzma` or `.tar.gz` file (based on compression setting)
 
 ### Important Notes
 
@@ -97,6 +103,9 @@ The solution contains two main projects:
 - Each thread is stored in a separate folder within the tar archive
 - File naming convention: `{sender}_{date}.eml` for individual messages
 - LZMA compression uses 256MB dictionary size and BT4 match finder for optimal compression
+- Gzip compression uses level 9 (best compression) for tar.gz output format
+- Compression method can be selected via `--compression` option or config file (defaults to "lzma")
+- File extensions are automatically appended based on compression method
 
 ## Testing
 

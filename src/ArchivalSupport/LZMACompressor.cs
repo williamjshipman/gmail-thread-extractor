@@ -9,7 +9,7 @@ namespace ArchivalSupport;
 /// Inherits from <see cref="BaseCompressor"/> and uses SevenZip LZMA encoder to
 /// compress tar-archived email threads for efficient storage.
 /// </summary>
-public class LZMACompressor
+public class LZMACompressor : ICompressor
 {
     /// <summary>
     /// The LZMA algorithm identifier.
@@ -65,7 +65,7 @@ public class LZMACompressor
     /// <returns>A task representing the asynchronous compression operation.</returns>
     public async Task Compress(string outputPath, Dictionary<ulong, List<MessageBlob>> threads)
     {
-        string sTempTarFilePath = Path.GetTempFileName();
+        string sTempTarFilePath = Path.GetRandomFileName();
         using (var fileStream = File.Create(outputPath))
         {
             using (var tempTarFileStream = new FileStream(sTempTarFilePath, FileMode.Create, FileAccess.Write))
