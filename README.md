@@ -40,7 +40,7 @@ cd gmail-thread-extractor
 2. Run the project with the following command:
 
 ```bash
-dotnet run --project .\src\GMailThreadExtractor\ --email <email> --password <app password> --search "<search terms>" --output <output file> --compression <lzma|gzip>
+dotnet run --project .\src\GMailThreadExtractor\ --email <email> --password <app password> --search "<search terms>" --output <output file> --compression <lzma|gzip> --timeout <minutes>
 ```
 
 Replace `<email>` with your GMail email address, `<app password>` with the app password you generated, `<search terms>` with the search terms you want to use to find the thread, and `<output file>` with the path to the file where you want to save the threads that were found.
@@ -51,6 +51,7 @@ Replace `<email>` with your GMail email address, `<app password>` with the app p
 - `--compression` is optional (defaults to "lzma") - choose "lzma" for .tar.lzma or "gzip" for .tar.gz
 - `--config` is optional - specify a JSON configuration file path
 - `--label` is optional - filter by Gmail label
+- `--timeout` is optional (defaults to 5 minutes, range: 1-60 minutes) - IMAP operation timeout
 
 ## Testing
 
@@ -75,7 +76,8 @@ You can use a JSON configuration file to provide default values for command-line
   "search": "from:important-sender@example.com",
   "label": "Important",
   "output": "extracted-emails",
-  "compression": "lzma"
+  "compression": "lzma",
+  "timeoutMinutes": 5
 }
 ```
 

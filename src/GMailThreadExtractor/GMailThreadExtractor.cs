@@ -22,13 +22,15 @@ namespace GMailThreadExtractor
         private readonly string _password;
         private readonly string _imapServer;
         private readonly int _imapPort;
+        private readonly TimeSpan _timeout;
 
-        public GMailThreadExtractor(string email, string password, string imapServer, int imapPort)
+        public GMailThreadExtractor(string email, string password, string imapServer, int imapPort, TimeSpan? timeout = null)
         {
             _email = email;
             _password = password;
             _imapServer = imapServer;
             _imapPort = imapPort;
+            _timeout = timeout ?? TimeSpan.FromMinutes(5); // Default 5 minute timeout
         }
 
         public async Task ExtractThreadsAsync(string outputPath, string searchQuery, string label, string compression = "lzma")
@@ -36,6 +38,9 @@ namespace GMailThreadExtractor
             // Connect to the IMAP server and authenticate
             using (var client = new ImapClient())
             {
+                // Configure timeout for all IMAP operations
+                client.Timeout = (int)_timeout.TotalMilliseconds;
+
                 await client.ConnectAsync(_imapServer, _imapPort,
                     MailKit.Security.SecureSocketOptions.SslOnConnect);
                 await client.AuthenticateAsync(_email, _password);

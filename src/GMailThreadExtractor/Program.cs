@@ -66,6 +66,20 @@ namespace GMailThreadExtractor
                     result.ErrorMessage = "Compression method must be either 'lzma' or 'gzip'.";
                 }
             });
+            var timeoutOption = new Option<int>(
+                name: "--timeout",
+                description: "IMAP operation timeout in minutes. Default is 5 minutes.")
+            {
+                IsRequired = false
+            };
+            timeoutOption.AddValidator(result =>
+            {
+                var value = result.GetValueOrDefault<int>();
+                if (value < 1 || value > 60)
+                {
+                    result.ErrorMessage = "Timeout must be between 1 and 60 minutes.";
+                }
+            });
             var rootCommand = new RootCommand("Extracts email threads from a Gmail account.")
             {
                 configOption,
@@ -74,10 +88,11 @@ namespace GMailThreadExtractor
                 searchOption,
                 labelOption,
                 outputOption,
-                compressionOption
+                compressionOption,
+                timeoutOption
             };
 
-            rootCommand.SetHandler(async (configPath, email, password, search, label, output, compression) =>
+            rootCommand.SetHandler(async (configPath, email, password, search, label, output, compression, timeoutMinutes) =>
             {
                 // Load config file if specified
                 var config = new Config();
@@ -106,7 +121,7 @@ namespace GMailThreadExtractor
                 }
 
                 // Merge config with command line arguments (command line takes precedence)
-                var finalConfig = config.MergeWithCommandLine(email, password, search, label, output, compression);
+                var finalConfig = config.MergeWithCommandLine(email, password, search, label, output, compression, timeoutMinutes);
 
                 // Validate required parameters and prompt if needed
                 finalConfig.Email = string.IsNullOrWhiteSpace(finalConfig.Email) ? PromptForEmail() : finalConfig.Email;
@@ -122,10 +137,11 @@ namespace GMailThreadExtractor
                     throw new ArgumentException("Search query is required. Specify --search or include 'search' in config file.");
                 }
 
-                var extractor = new GMailThreadExtractor(finalConfig.Email, finalConfig.Password, "imap.gmail.com", 993);
+                var timeout = finalConfig.TimeoutMinutes.HasValue ? TimeSpan.FromMinutes(finalConfig.TimeoutMinutes.Value) : (TimeSpan?)null;
+                var extractor = new GMailThreadExtractor(finalConfig.Email, finalConfig.Password, "imap.gmail.com", 993, timeout);
                 await extractor.ExtractThreadsAsync(finalConfig.Output, finalConfig.Search, finalConfig.Label ?? string.Empty, finalConfig.Compression ?? "lzma");
             },
-            configOption, emailOption, passwordOption, searchOption, labelOption, outputOption, compressionOption);
+            configOption, emailOption, passwordOption, searchOption, labelOption, outputOption, compressionOption, timeoutOption);
 
             return await rootCommand.InvokeAsync(args);
         }

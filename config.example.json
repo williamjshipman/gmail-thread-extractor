@@ -7,5 +7,6 @@
   "search": "from:important-sender@example.com",
   "label": "Important",
   "output": "extracted-emails",
-  "compression": "lzma"
+  "compression": "lzma",
+  "timeoutMinutes": 5
 }

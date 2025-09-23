@@ -39,6 +39,11 @@ namespace GMailThreadExtractor
         public string? Compression { get; set; }
 
         /// <summary>
+        /// IMAP operation timeout in minutes.
+        /// </summary>
+        public int? TimeoutMinutes { get; set; }
+
+        /// <summary>
         /// Loads configuration from a JSON file.
         /// </summary>
         /// <param name="configPath">The path to the JSON config file.</param>
@@ -80,8 +85,9 @@ namespace GMailThreadExtractor
         /// <param name="cmdLabel">Command-line label value.</param>
         /// <param name="cmdOutput">Command-line output value.</param>
         /// <param name="cmdCompression">Command-line compression value.</param>
+        /// <param name="cmdTimeoutMinutes">Command-line timeout value.</param>
         /// <returns>A new Config object with merged values.</returns>
-        public Config MergeWithCommandLine(string? cmdEmail, string? cmdPassword, string? cmdSearch, string? cmdLabel, string? cmdOutput, string? cmdCompression)
+        public Config MergeWithCommandLine(string? cmdEmail, string? cmdPassword, string? cmdSearch, string? cmdLabel, string? cmdOutput, string? cmdCompression, int? cmdTimeoutMinutes)
         {
             return new Config
             {
@@ -90,7 +96,8 @@ namespace GMailThreadExtractor
                 Search = !string.IsNullOrWhiteSpace(cmdSearch) ? cmdSearch : Search,
                 Label = !string.IsNullOrWhiteSpace(cmdLabel) ? cmdLabel : Label,
                 Output = !string.IsNullOrWhiteSpace(cmdOutput) ? cmdOutput : Output,
-                Compression = !string.IsNullOrWhiteSpace(cmdCompression) ? cmdCompression : Compression
+                Compression = !string.IsNullOrWhiteSpace(cmdCompression) ? cmdCompression : Compression,
+                TimeoutMinutes = cmdTimeoutMinutes.HasValue ? cmdTimeoutMinutes : TimeoutMinutes
             };
         }
     }

@@ -17,12 +17,13 @@ dotnet build
 ### Running the application
 
 ```bash
-dotnet run --project .\src\GMailThreadExtractor\ --email <email> --password <app_password> --search "<search_terms>" --output <output_file> --compression <lzma|gzip>
+dotnet run --project .\src\GMailThreadExtractor\ --email <email> --password <app_password> --search "<search_terms>" --output <output_file> --compression <lzma|gzip> --timeout <minutes>
 ```
 
 The `--email` and `--password` parameters are optional (user will be prompted if not provided).
 The `--search` and `--output` parameters are required.
 The `--compression` parameter is optional (defaults to "lzma").
+The `--timeout` parameter is optional (defaults to 5 minutes, range: 1-60 minutes).
 
 ### Configuration File Support
 
@@ -48,11 +49,14 @@ Example config file format:
   "search": "from:important-sender@example.com",
   "label": "Important",
   "output": "extracted-emails",
-  "compression": "lzma"
+  "compression": "lzma",
+  "timeoutMinutes": 5
 }
 ```
 
 The `compression` field accepts either "lzma" (default) or "gzip". The appropriate file extension (.tar.lzma or .tar.gz) will be automatically appended to the output filename if not already present.
+
+The `timeoutMinutes` field sets the IMAP operation timeout (1-60 minutes, defaults to 5). This prevents hanging on slow networks or large operations.
 
 ### Solution structure
 
