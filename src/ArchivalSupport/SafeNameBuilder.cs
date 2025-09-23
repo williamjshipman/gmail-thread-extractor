@@ -9,16 +9,22 @@ internal static class SafeNameBuilder
 {
     private const int MaxSegmentLength = 80;
     private const int MaxFileNameLength = 120;
-
+    private const int MaxTarNameLength = 100; // USTAR name field limit
     private static readonly HashSet<char> InvalidCharacters;
 
     static SafeNameBuilder()
     {
-        InvalidCharacters = new HashSet<char>(Path.GetInvalidFileNameChars())
+        var invalid = new HashSet<char>
         {
-            '/',
-            '\\'
+            '/', '\\', ':', '*', '?', '"', '<', '>', '|'
         };
+
+        foreach (var ch in Path.GetInvalidFileNameChars())
+        {
+            invalid.Add(ch);
+        }
+
+        InvalidCharacters = invalid;
     }
 
     private static string Sanitize(string? value, string fallback, bool enforceLength = true)
@@ -65,37 +71,72 @@ internal static class SafeNameBuilder
 
     public static string BuildThreadDirectoryName(ulong threadId, string? subject)
     {
+        var threadSegment = threadId.ToString();
         var safeSubject = Sanitize(subject, "thread");
-        return $"{threadId}_{safeSubject}";
+
+        const string delimiter = "_";
+        var availableForSubject = MaxTarNameLength - threadSegment.Length - delimiter.Length;
+
+        string name;
+        if (availableForSubject <= 0)
+        {
+            name = threadSegment;
+        }
+        else
+        {
+            if (safeSubject.Length > availableForSubject)
+            {
+                safeSubject = safeSubject[..availableForSubject];
+            }
+
+            name = $"{threadSegment}{delimiter}{safeSubject}";
+        }
+
+        if (name.Length > MaxTarNameLength)
+        {
+            name = name[..MaxTarNameLength];
+        }
+
+        return name;
     }
 
     public static string BuildMessageFileName(string uniqueId, string? subject, string dateSegment)
     {
+        const string Extension = ".eml";
+        var coreMaxLength = MaxFileNameLength - Extension.Length;
+
         var safeUid = Sanitize(uniqueId, "uid", enforceLength: false);
         var safeDate = Sanitize(dateSegment, "date");
         var safeSubject = Sanitize(subject, string.Empty);
 
-        var core = $"{safeUid}_{safeDate}";
-
-        if (!string.IsNullOrEmpty(safeSubject))
+        if (safeUid.Length > MaxSegmentLength)
         {
-            var available = MaxFileNameLength - core.Length - 1;
-            if (available > 0)
+            safeUid = safeUid[..MaxSegmentLength];
+        }
+
+        var core = $"{safeUid}_{safeDate}";
+        var remaining = coreMaxLength - core.Length;
+
+        if (!string.IsNullOrEmpty(safeSubject) && remaining > 1)
+        {
+            // Account for joining underscore.
+            remaining -= 1;
+            if (remaining > 0)
             {
-                if (safeSubject.Length > available)
+                if (safeSubject.Length > remaining)
                 {
-                    safeSubject = safeSubject[..available];
+                    safeSubject = safeSubject[..remaining];
                 }
 
                 core = $"{core}_{safeSubject}";
             }
         }
 
-        if (core.Length > MaxFileNameLength)
+        if (core.Length > coreMaxLength)
         {
-            core = core[..MaxFileNameLength];
+            core = core[..coreMaxLength];
         }
 
-        return $"{core}.eml";
+        return $"{core}{Extension}";
     }
 }
