@@ -22,20 +22,25 @@ namespace GMailThreadExtractor
         private readonly string _password;
         private readonly string _imapServer;
         private readonly int _imapPort;
+        private readonly TimeSpan _timeout;
 
-        public GMailThreadExtractor(string email, string password, string imapServer, int imapPort)
+        public GMailThreadExtractor(string email, string password, string imapServer, int imapPort, TimeSpan? timeout = null)
         {
             _email = email;
             _password = password;
             _imapServer = imapServer;
             _imapPort = imapPort;
+            _timeout = timeout ?? TimeSpan.FromMinutes(5); // Default 5 minute timeout
         }
 
-        public async Task ExtractThreadsAsync(string outputPath, string searchQuery, string label)
+        public async Task ExtractThreadsAsync(string outputPath, string searchQuery, string label, string compression = "lzma")
         {
             // Connect to the IMAP server and authenticate
             using (var client = new ImapClient())
             {
+                // Configure timeout for all IMAP operations
+                client.Timeout = (int)_timeout.TotalMilliseconds;
+
                 await client.ConnectAsync(_imapServer, _imapPort,
                     MailKit.Security.SecureSocketOptions.SslOnConnect);
                 await client.AuthenticateAsync(_email, _password);
@@ -88,9 +93,17 @@ namespace GMailThreadExtractor
                 }
 
                 Console.WriteLine($"Found {threads.Count} threads.");
-                if (!outputPath.EndsWith(".tar.lzma"))
+
+                // Determine file extension based on compression method
+                var expectedExtension = compression.ToLowerInvariant() switch
                 {
-                    outputPath = outputPath + ".tar.lzma";
+                    "gzip" => ".tar.gz",
+                    _ => ".tar.lzma" // Default to LZMA
+                };
+
+                if (!outputPath.EndsWith(expectedExtension))
+                {
+                    outputPath = outputPath + expectedExtension;
                 }
 
                 // Download the emails and save them in a new dictionary.
@@ -106,7 +119,18 @@ namespace GMailThreadExtractor
                     }
                 }
 
-                var compressor = new LZMACompressor();
+                // Select compressor based on compression method
+                ICompressor compressor;
+                switch (compression.ToLowerInvariant())
+                {
+                    case "gzip":
+                        compressor = new TarGzipCompressor();
+                        break;
+                    case "lzma":
+                    default:
+                        compressor = new LZMACompressor();
+                        break;
+                }
                 await compressor.Compress(outputPath, emailDictionary);
                 Console.WriteLine($"All done! Emails saved to {outputPath}");
             }

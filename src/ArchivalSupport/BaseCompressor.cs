@@ -21,10 +21,20 @@ public static class BaseCompressor
     {
         foreach (var thread in threads)
         {
-            string folderName = $"{thread.Key} {thread.Value[0].Subject}/";
+            if (thread.Value.Count == 0)
+            {
+                Console.WriteLine($"Thread ID: {thread.Key} contained no messages. Skipping.");
+                continue;
+            }
+
+            var folderSegment = SafeNameBuilder.BuildThreadDirectoryName(thread.Key, thread.Value[0].Subject);
+            var folderName = $"{folderSegment}/";
             var folderEntry = TarEntry.CreateTarEntry(folderName);
             tarStream.PutNextEntry(folderEntry);
+            tarStream.CloseEntry();
+
             Console.WriteLine($"Thread ID: {thread.Key}");
+
             foreach (var message in thread.Value)
             {
                 try
@@ -32,7 +42,7 @@ public static class BaseCompressor
                     Console.WriteLine(message.ToString());
 
                     // Save the message to the tar file
-                    var outputEmlPath = $"{folderEntry.Name}{message.FileName}";
+                    var outputEmlPath = $"{folderName}{message.FileName}";
                     var tarEntry = TarEntry.CreateTarEntry(outputEmlPath);
                     tarEntry.Size = message.Size;
                     tarEntry.ModTime = message.Date.ToUniversalTime();
@@ -49,8 +59,8 @@ public static class BaseCompressor
                     {
                         tarStream.CloseEntry();
                     }
-                    Console.WriteLine($"Saved to: {outputPath}/{outputEmlPath}");
 
+                    Console.WriteLine($"Saved to: {outputPath}/{outputEmlPath}");
                     Console.WriteLine();
                 }
                 catch (Exception ex)
@@ -58,8 +68,8 @@ public static class BaseCompressor
                     Console.WriteLine($"Error processing message: {ex.Message}");
                 }
             }
-            tarStream.CloseEntry();
-            Console.WriteLine($"Saved thread to: {outputPath}/{folderEntry.Name}");
+
+            Console.WriteLine($"Saved thread to: {outputPath}/{folderName}");
         }
 
         await tarStream.FlushAsync();
