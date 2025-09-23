@@ -24,18 +24,39 @@ public class TarGzipCompressor : ICompressor
     /// <returns>A task representing the asynchronous compression operation.</returns>
     public async Task Compress(string outputPath, Dictionary<ulong, List<MessageBlob>> threads)
     {
-        using (var fileStream = File.Create(outputPath))
+        try
         {
-            using (var gzipStream = new GZipOutputStream(fileStream))
+            using (var fileStream = File.Create(outputPath))
             {
-                // Set compression level for optimal compression
-                gzipStream.SetLevel(GZIP_COMPRESSION_LEVEL);
-
-                using (var tarStream = new TarOutputStream(gzipStream, Encoding.UTF8))
+                using (var gzipStream = new GZipOutputStream(fileStream))
                 {
-                    await BaseCompressor.WriteThreadsToTar(outputPath, tarStream, threads);
+                    // Set compression level for optimal compression
+                    gzipStream.SetLevel(GZIP_COMPRESSION_LEVEL);
+
+                    using (var tarStream = new TarOutputStream(gzipStream, Encoding.UTF8))
+                    {
+                        await BaseCompressor.WriteThreadsToTar(outputPath, tarStream, threads);
+                    }
                 }
             }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error during compression: {ex.Message}");
+            try
+            {
+                // Delete the output tar.gz file if it exists.
+                // The file may be partially written or corrupted.
+                if (File.Exists(outputPath))
+                    File.Delete(outputPath);
+            }
+            catch (Exception ex2)
+            {
+                Console.WriteLine($"Warning: Unable to delete corrupted output file {outputPath}. {ex2.Message}");
+            }
+
+            // Re-throw the original exception to maintain proper error propagation
+            throw;
         }
     }
 }
