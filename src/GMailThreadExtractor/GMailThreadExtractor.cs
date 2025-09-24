@@ -42,11 +42,28 @@ namespace GMailThreadExtractor
                 client.Timeout = (int)_timeout.TotalMilliseconds;
                 Console.WriteLine("IMAP Timeout set to: " + client.Timeout + " ms");
 
-                await client.ConnectAsync(_imapServer, _imapPort,
-                    MailKit.Security.SecureSocketOptions.SslOnConnect);
-                await client.AuthenticateAsync(_email, _password);
+                // Connect with retry logic
+                await RetryHelper.ExecuteWithRetryAsync(
+                    async () => await client.ConnectAsync(_imapServer, _imapPort, MailKit.Security.SecureSocketOptions.SslOnConnect),
+                    maxAttempts: 3,
+                    baseDelay: TimeSpan.FromSeconds(2),
+                    operationName: "IMAP connection");
+
+                // Authenticate with retry logic
+                await RetryHelper.ExecuteWithRetryAsync(
+                    async () => await client.AuthenticateAsync(_email, _password),
+                    maxAttempts: 2, // Fewer attempts for auth to avoid account lockout
+                    baseDelay: TimeSpan.FromSeconds(1),
+                    operationName: "IMAP authentication");
+
                 var allMail = client.GetFolder(SpecialFolder.All);
-                await allMail.OpenAsync(FolderAccess.ReadOnly);
+
+                // Open folder with retry logic
+                await RetryHelper.ExecuteWithRetryAsync(
+                    async () => await allMail.OpenAsync(FolderAccess.ReadOnly),
+                    maxAttempts: 3,
+                    baseDelay: TimeSpan.FromSeconds(1),
+                    operationName: "opening All Mail folder");
 
                 // Search for emails based on the provided criteria
                 var queries = new List<SearchQuery>();
@@ -63,14 +80,24 @@ namespace GMailThreadExtractor
                 {
                     query = queries.Aggregate(query, (current, q) => current.And(q));
                 }
-                var uids = await allMail.SearchAsync(query);
+                // Search for emails with retry logic
+                var uids = await RetryHelper.ExecuteWithRetryAsync(
+                    async () => await allMail.SearchAsync(query),
+                    maxAttempts: 3,
+                    baseDelay: TimeSpan.FromSeconds(1),
+                    operationName: "searching for emails");
 
-                var messages = await allMail.FetchAsync(uids,
-                    MessageSummaryItems.BodyStructure |
-                    MessageSummaryItems.Envelope |
-                    MessageSummaryItems.UniqueId |
-                    MessageSummaryItems.GMailThreadId |
-                    MessageSummaryItems.Size);
+                // Fetch message summaries with retry logic
+                var messages = await RetryHelper.ExecuteWithRetryAsync(
+                    async () => await allMail.FetchAsync(uids,
+                        MessageSummaryItems.BodyStructure |
+                        MessageSummaryItems.Envelope |
+                        MessageSummaryItems.UniqueId |
+                        MessageSummaryItems.GMailThreadId |
+                        MessageSummaryItems.Size),
+                    maxAttempts: 3,
+                    baseDelay: TimeSpan.FromSeconds(2),
+                    operationName: "fetching message summaries");
 
                 var threads = new Dictionary<ulong, List<IMessageSummary>>();
                 foreach (var message in messages)
@@ -82,13 +109,24 @@ namespace GMailThreadExtractor
                         {
                             continue; // Skip if we already have this thread.
                         }
-                        var threadUuids = await allMail.SearchAsync(SearchQuery.All.And(SearchQuery.GMailThreadId(threadId)));
-                        var threadList = await allMail.FetchAsync(threadUuids,
-                            MessageSummaryItems.BodyStructure |
-                            MessageSummaryItems.Envelope |
-                            MessageSummaryItems.UniqueId |
-                            MessageSummaryItems.GMailThreadId |
-                            MessageSummaryItems.Size);
+                        // Search for thread messages with retry logic
+                        var threadUuids = await RetryHelper.ExecuteWithRetryAsync(
+                            async () => await allMail.SearchAsync(SearchQuery.All.And(SearchQuery.GMailThreadId(threadId))),
+                            maxAttempts: 3,
+                            baseDelay: TimeSpan.FromSeconds(1),
+                            operationName: $"searching thread {threadId}");
+
+                        // Fetch thread messages with retry logic
+                        var threadList = await RetryHelper.ExecuteWithRetryAsync(
+                            async () => await allMail.FetchAsync(threadUuids,
+                                MessageSummaryItems.BodyStructure |
+                                MessageSummaryItems.Envelope |
+                                MessageSummaryItems.UniqueId |
+                                MessageSummaryItems.GMailThreadId |
+                                MessageSummaryItems.Size),
+                            maxAttempts: 3,
+                            baseDelay: TimeSpan.FromSeconds(1),
+                            operationName: $"fetching thread {threadId} messages");
                         threads[threadId] = threadList.ToList();
                     }
                 }
@@ -116,7 +154,13 @@ namespace GMailThreadExtractor
                     emailDictionary[thread.Key] = new List<MessageBlob>();
                     foreach (var message in thread.Value)
                     {
-                        var mimeEmail = await allMail.GetMessageAsync(message.UniqueId);
+                        // Download email message with retry logic
+                        var mimeEmail = await RetryHelper.ExecuteWithRetryAsync(
+                            async () => await allMail.GetMessageAsync(message.UniqueId),
+                            maxAttempts: 3,
+                            baseDelay: TimeSpan.FromSeconds(1),
+                            operationName: $"downloading message {message.UniqueId}");
+
                         var email = MessageWriter.MessageToBlob(message, mimeEmail, maxSizeBytes);
                         emailDictionary[thread.Key].Add(email);
                     }
