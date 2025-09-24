@@ -125,7 +125,7 @@ namespace ArchivalSupport
         public string DateString =>
             Date.ToUniversalTime().ToString("yyyy-MM-dd_HH-mm-ss");
 
-        public string FileName => SafeNameBuilder.BuildMessageFileName(UniqueId, Subject, DateString);
+        public string FileName => SafeNameBuilder.BuildMessageFileName(UniqueId, Subject, DateString, From);
 
         /// <summary>
         /// Construct a new MessageBlob object with in-memory data.
