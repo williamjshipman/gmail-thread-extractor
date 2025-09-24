@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Shared;
 
 namespace GMailThreadExtractor
 {
@@ -82,19 +83,25 @@ namespace GMailThreadExtractor
                 }
                 catch (ArgumentException ex)
                 {
-                    throw new ArgumentException($"Invalid configuration in file '{configPath}': {ex.Message}", ex);
+                    ErrorHandler.Handle(ErrorCategory.Configuration,
+                        $"Invalid configuration in file '{configPath}': {ex.Message}",
+                        ex,
+                        $"Config file: {configPath}");
+                    // This will throw due to Configuration category default strategy
                 }
 
                 return finalConfig;
             }
-            catch (ArgumentException)
-            {
-                // Re-throw validation errors with context already added
-                throw;
-            }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error reading config file {configPath}: {ex.Message}");
+                // Use standardized error handling for config loading failures
+                if (!ErrorHandler.HandleException(ex, $"Loading config file: {configPath}", ErrorHandlingStrategy.LogAndContinue))
+                {
+                    throw;
+                }
+
+                // Return empty config as fallback
+                Console.WriteLine($"Using default configuration due to error loading {configPath}");
                 return new Config();
             }
         }

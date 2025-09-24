@@ -1,6 +1,7 @@
 using System.Text;
 using ICSharpCode.SharpZipLib.Tar;
 using MailKit;
+using Shared;
 
 namespace ArchivalSupport;
 
@@ -69,7 +70,10 @@ public static class BaseCompressor
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"Error writing message to tar: {ex.Message}");
+                        ErrorHandler.Handle(ErrorCategory.Compression,
+                            "Failed to write message to tar archive",
+                            ex,
+                            $"Message: {message.FileName}");
                     }
                     finally
                     {
@@ -81,7 +85,10 @@ public static class BaseCompressor
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error processing message: {ex.Message}");
+                    ErrorHandler.Handle(ErrorCategory.EmailProcessing,
+                        "Error processing message for archival",
+                        ex,
+                        $"Message ID: {message.UniqueId}");
                 }
             }
 
@@ -161,7 +168,10 @@ public static class BaseCompressor
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"Error writing message to tar: {ex.Message}");
+                        ErrorHandler.Handle(ErrorCategory.Compression,
+                            "Failed to write message to tar archive",
+                            ex,
+                            $"Message: {messageBlob.FileName}");
                     }
                     finally
                     {
@@ -180,7 +190,10 @@ public static class BaseCompressor
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error processing message {messageSummary.UniqueId}: {ex.Message}");
+                    ErrorHandler.Handle(ErrorCategory.EmailProcessing,
+                        "Error processing message for streaming archival",
+                        ex,
+                        $"Message ID: {messageSummary.UniqueId}");
                 }
             }
 

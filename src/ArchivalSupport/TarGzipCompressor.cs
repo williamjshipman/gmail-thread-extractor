@@ -2,6 +2,7 @@ using System.Text;
 using ICSharpCode.SharpZipLib.Tar;
 using ICSharpCode.SharpZipLib.GZip;
 using MailKit;
+using Shared;
 
 namespace ArchivalSupport;
 
@@ -43,7 +44,10 @@ public class TarGzipCompressor : ICompressor
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error during compression: {ex.Message}");
+            ErrorHandler.Handle(ErrorCategory.Compression,
+                "Gzip compression failed",
+                ex,
+                $"Output file: {outputPath}");
             try
             {
                 // Delete the output tar.gz file if it exists.
@@ -90,7 +94,10 @@ public class TarGzipCompressor : ICompressor
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error during streaming compression: {ex.Message}");
+            ErrorHandler.Handle(ErrorCategory.Compression,
+                "Gzip streaming compression failed",
+                ex,
+                $"Output file: {outputPath}");
             try
             {
                 // Delete the output tar.gz file if it exists.
