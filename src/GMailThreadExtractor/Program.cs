@@ -74,8 +74,8 @@ namespace GMailThreadExtractor
             };
             timeoutOption.AddValidator(result =>
             {
-                var value = result.GetValueOrDefault<int>();
-                if (value < 1 || value > 60)
+                var value = result.GetValueOrDefault<int?>();
+                if (value.HasValue && (value.Value < 1 || value.Value > 60))
                 {
                     result.ErrorMessage = "Timeout must be between 1 and 60 minutes.";
                 }
@@ -224,3 +224,4 @@ namespace GMailThreadExtractor
         }
     }
 }
+
