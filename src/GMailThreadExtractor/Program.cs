@@ -66,7 +66,7 @@ namespace GMailThreadExtractor
                     result.ErrorMessage = "Compression method must be either 'lzma' or 'gzip'.";
                 }
             });
-            var timeoutOption = new Option<int>(
+            var timeoutOption = new Option<int?>(
                 name: "--timeout",
                 description: "IMAP operation timeout in minutes. Default is 5 minutes.")
             {
@@ -120,6 +120,14 @@ namespace GMailThreadExtractor
                     }
                 }
 
+                if (timeoutMinutes <= 0)
+                {
+                    // Use default if invalid
+                    // System.CommandLine should give a null value if not specified but instead gives 0.
+                    // We handle that here by converting 0 or negative values to null.
+                    timeoutMinutes = null;
+                }
+
                 // Merge config with command line arguments (command line takes precedence)
                 var finalConfig = config.MergeWithCommandLine(email, password, search, label, output, compression, timeoutMinutes);
 
@@ -139,7 +147,7 @@ namespace GMailThreadExtractor
 
                 var timeout = finalConfig.TimeoutMinutes.HasValue ? TimeSpan.FromMinutes(finalConfig.TimeoutMinutes.Value) : (TimeSpan?)null;
                 var extractor = new GMailThreadExtractor(finalConfig.Email, finalConfig.Password, "imap.gmail.com", 993, timeout);
-                await extractor.ExtractThreadsAsync(finalConfig.Output, finalConfig.Search, finalConfig.Label ?? string.Empty, finalConfig.Compression ?? "lzma");
+                await extractor.ExtractThreadsAsync(finalConfig.Output, finalConfig.Search, finalConfig.Label ?? string.Empty, finalConfig.Compression ?? "lzma", finalConfig.MaxMessageSizeMB);
             },
             configOption, emailOption, passwordOption, searchOption, labelOption, outputOption, compressionOption, timeoutOption);
 
