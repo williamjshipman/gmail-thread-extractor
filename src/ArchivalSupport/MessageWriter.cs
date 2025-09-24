@@ -20,36 +20,62 @@ namespace ArchivalSupport
         /// <returns>A new MessageBlob object.</returns>
         public static MessageBlob MessageToBlob(IMessageSummary msgSummary, MimeMessage message, long maxSizeBytes = 10 * 1024 * 1024)
         {
-            // First, estimate the message size using a temporary memory stream
-            long estimatedSize;
-            using (var estimateStream = new MemoryStream())
-            {
-                message.WriteTo(estimateStream);
-                estimatedSize = estimateStream.Length;
+            var reportedSize = msgSummary?.Size.HasValue == true ? (long)msgSummary.Size.Value : -1L;
 
-                // If message is small enough, return the in-memory version
-                if (estimatedSize <= maxSizeBytes)
-                {
-                    return new MessageBlob(
-                        msgSummary.UniqueId.ToString(),
-                        estimateStream.ToArray(),
-                        message.Subject ?? string.Empty,
-                        message.From?.ToString() ?? string.Empty,
-                        message.To?.ToString() ?? string.Empty,
-                        message.Date.UtcDateTime);
-                }
+            if (reportedSize >= 0 && reportedSize <= maxSizeBytes)
+            {
+                using var buffer = new MemoryStream();
+                message.WriteTo(buffer);
+                return new MessageBlob(
+                    msgSummary?.UniqueId.ToString() ?? "unknown",
+                    buffer.ToArray(),
+                    message.Subject ?? string.Empty,
+                    message.From?.ToString() ?? string.Empty,
+                    message.To?.ToString() ?? string.Empty,
+                    message.Date.UtcDateTime);
             }
 
-            // For large messages, create a streaming version
-            Console.WriteLine($"Message {msgSummary.UniqueId} ({estimatedSize:N0} bytes) will use streaming");
+            if (reportedSize > maxSizeBytes)
+            {
+                Console.WriteLine($"Message {msgSummary?.UniqueId.ToString() ?? "unknown"} ({reportedSize:N0} bytes) will use streaming");
+                return new MessageBlob(
+                    msgSummary?.UniqueId.ToString() ?? "unknown",
+                    async stream =>
+                    {
+                        message.WriteTo(stream);
+                        await stream.FlushAsync();
+                    },
+                    reportedSize,
+                    message.Subject ?? string.Empty,
+                    message.From?.ToString() ?? string.Empty,
+                    message.To?.ToString() ?? string.Empty,
+                    message.Date.UtcDateTime);
+            }
+
+            using var probe = new MemoryStream();
+            message.WriteTo(probe);
+
+            if (probe.Length <= maxSizeBytes)
+            {
+                return new MessageBlob(
+                    msgSummary?.UniqueId.ToString() ?? "unknown",
+                    probe.ToArray(),
+                    message.Subject ?? string.Empty,
+                    message.From?.ToString() ?? string.Empty,
+                    message.To?.ToString() ?? string.Empty,
+                    message.Date.UtcDateTime);
+            }
+
+            Console.WriteLine($"Message {msgSummary?.UniqueId.ToString() ?? "unknown"} ({probe.Length:N0} bytes) will use streaming");
 
             return new MessageBlob(
-                msgSummary.UniqueId.ToString(),
-                async (stream) => {
+                msgSummary?.UniqueId.ToString() ?? "unknown",
+                async stream =>
+                {
                     message.WriteTo(stream);
                     await stream.FlushAsync();
                 },
-                estimatedSize,
+                probe.Length,
                 message.Subject ?? string.Empty,
                 message.From?.ToString() ?? string.Empty,
                 message.To?.ToString() ?? string.Empty,
