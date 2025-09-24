@@ -58,45 +58,48 @@ public class LZMACompressor : ICompressor
     }
 
     /// <summary>
-    /// Compresses the provided email threads directly into an LZMA stream without creating temporary files.
-    /// Uses streaming compression to minimize memory usage.
+    /// Compresses the provided email threads using a memory-efficient streaming approach.
+    /// Uses a temporary file for intermediate tar data but with minimal memory usage during I/O.
     /// </summary>
     /// <param name="outputPath">The output file path for the compressed archive.</param>
     /// <param name="threads">A dictionary mapping thread IDs to lists of <see cref="MessageBlob"/> objects.</param>
     /// <returns>A task representing the asynchronous compression operation.</returns>
     public async Task Compress(string outputPath, Dictionary<ulong, List<MessageBlob>> threads)
     {
+        string tempTarFilePath = Path.Combine(Path.GetTempPath(), $"lzma_temp_{Guid.NewGuid():N}.tar");
+
         try
         {
-            using (var fileStream = File.Create(outputPath))
+            // Step 1: Create tar file with streaming I/O (low memory usage)
+            using (var tempFileStream = new FileStream(tempTarFilePath, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 8192))
             {
-                // Write LZMA properties header
-                encoder.WriteCoderProperties(fileStream);
-
-                // We need to write uncompressed size, but we don't know it yet
-                // Write placeholder for size (8 bytes) - will be updated later
-                long sizePosition = fileStream.Position;
-                for (int i = 0; i < 8; i++)
-                    fileStream.WriteByte(0);
-
-                // Create a stream that will compress data as it's written
-                using (var lzmaStream = new LZMAOutputStream(fileStream, encoder))
+                using (var tarStream = new TarOutputStream(tempFileStream, Encoding.UTF8))
                 {
-                    using (var tarStream = new TarOutputStream(lzmaStream, Encoding.UTF8))
-                    {
-                        await BaseCompressor.WriteThreadsToTar(outputPath, tarStream, threads);
-                    }
+                    await BaseCompressor.WriteThreadsToTar(outputPath, tarStream, threads);
+                }
+            }
 
-                    // Get the uncompressed size
-                    long uncompressedSize = lzmaStream.UncompressedSize;
+            // Step 2: Get file size for LZMA header
+            var tempFileInfo = new FileInfo(tempTarFilePath);
+            long uncompressedSize = tempFileInfo.Length;
 
-                    // Go back and write the actual uncompressed size
-                    fileStream.Position = sizePosition;
-                    for (int i = 0; i < 8; i++)
-                        fileStream.WriteByte((byte)(uncompressedSize >> (8 * i)));
+            // Step 3: Compress with streaming I/O (low memory usage)
+            using (var outputStream = new FileStream(outputPath, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 8192))
+            {
+                // Write LZMA properties
+                encoder.WriteCoderProperties(outputStream);
+
+                // Write uncompressed size (8 bytes)
+                for (int i = 0; i < 8; i++)
+                    outputStream.WriteByte((byte)(uncompressedSize >> (8 * i)));
+
+                // Compress the tar file with streaming
+                using (var inputStream = new FileStream(tempTarFilePath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 8192))
+                {
+                    encoder.Code(inputStream, outputStream, uncompressedSize, -1, null);
                 }
 
-                await fileStream.FlushAsync();
+                await outputStream.FlushAsync();
             }
         }
         catch (Exception ex)
@@ -113,6 +116,19 @@ public class LZMACompressor : ICompressor
                 Console.WriteLine($"Warning: Unable to delete output file {outputPath}. {ex2.Message}");
             }
             throw; // Re-throw to maintain error handling contract
+        }
+        finally
+        {
+            // Always clean up temporary file
+            try
+            {
+                if (File.Exists(tempTarFilePath))
+                    File.Delete(tempTarFilePath);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Warning: Unable to delete temporary file {tempTarFilePath}. {ex.Message}");
+            }
         }
     }
 }
