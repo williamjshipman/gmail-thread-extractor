@@ -1,5 +1,6 @@
 using System;
 using System.CommandLine;
+using System.CommandLine.Invocation;
 using System.Text;
 
 namespace GMailThreadExtractor
@@ -66,7 +67,7 @@ namespace GMailThreadExtractor
                     result.ErrorMessage = "Compression method must be either 'lzma' or 'gzip'.";
                 }
             });
-            var timeoutOption = new Option<int>(
+            var timeoutOption = new Option<int?>(
                 name: "--timeout",
                 description: "IMAP operation timeout in minutes. Default is 5 minutes.")
             {
@@ -74,10 +75,24 @@ namespace GMailThreadExtractor
             };
             timeoutOption.AddValidator(result =>
             {
-                var value = result.GetValueOrDefault<int>();
-                if (value < 1 || value > 60)
+                var value = result.GetValueOrDefault<int?>();
+                if (value.HasValue && (value.Value < 1 || value.Value > 60))
                 {
                     result.ErrorMessage = "Timeout must be between 1 and 60 minutes.";
+                }
+            });
+            var maxMessageSizeOption = new Option<int?>(
+                name: "--max-message-size",
+                description: "Maximum message size in MB to load into memory. Larger messages use streaming. Default is 10 MB.")
+            {
+                IsRequired = false
+            };
+            maxMessageSizeOption.AddValidator(result =>
+            {
+                var value = result.GetValueOrDefault<int?>();
+                if (value.HasValue && (value.Value < 1 || value.Value > 1000))
+                {
+                    result.ErrorMessage = "Max message size must be between 1 and 1000 MB.";
                 }
             });
             var rootCommand = new RootCommand("Extracts email threads from a Gmail account.")
@@ -89,11 +104,21 @@ namespace GMailThreadExtractor
                 labelOption,
                 outputOption,
                 compressionOption,
-                timeoutOption
+                timeoutOption,
+                maxMessageSizeOption
             };
 
-            rootCommand.SetHandler(async (configPath, email, password, search, label, output, compression, timeoutMinutes) =>
+            rootCommand.SetHandler(async (InvocationContext context) =>
             {
+                var configPath = context.ParseResult.GetValueForOption(configOption);
+                var email = context.ParseResult.GetValueForOption(emailOption);
+                var password = context.ParseResult.GetValueForOption(passwordOption);
+                var search = context.ParseResult.GetValueForOption(searchOption);
+                var label = context.ParseResult.GetValueForOption(labelOption);
+                var output = context.ParseResult.GetValueForOption(outputOption);
+                var compression = context.ParseResult.GetValueForOption(compressionOption);
+                var timeoutMinutes = context.ParseResult.GetValueForOption(timeoutOption);
+                var maxMessageSizeMB = context.ParseResult.GetValueForOption(maxMessageSizeOption);
                 // Load config file if specified
                 var config = new Config();
                 if (!string.IsNullOrWhiteSpace(configPath))
@@ -120,8 +145,24 @@ namespace GMailThreadExtractor
                     }
                 }
 
+                if (timeoutMinutes <= 0)
+                {
+                    // Use default if invalid
+                    // System.CommandLine should give a null value if not specified but instead gives 0.
+                    // We handle that here by converting 0 or negative values to null.
+                    timeoutMinutes = null;
+                }
+
+                if (maxMessageSizeMB <= 0)
+                {
+                    // Use default if invalid
+                    // System.CommandLine should give a null value if not specified but instead gives 0.
+                    // We handle that here by converting 0 or negative values to null.
+                    maxMessageSizeMB = null;
+                }
+
                 // Merge config with command line arguments (command line takes precedence)
-                var finalConfig = config.MergeWithCommandLine(email, password, search, label, output, compression, timeoutMinutes);
+                var finalConfig = config.MergeWithCommandLine(email, password, search, label, output, compression, timeoutMinutes, maxMessageSizeMB);
 
                 // Validate required parameters and prompt if needed
                 finalConfig.Email = string.IsNullOrWhiteSpace(finalConfig.Email) ? PromptForEmail() : finalConfig.Email;
@@ -139,9 +180,8 @@ namespace GMailThreadExtractor
 
                 var timeout = finalConfig.TimeoutMinutes.HasValue ? TimeSpan.FromMinutes(finalConfig.TimeoutMinutes.Value) : (TimeSpan?)null;
                 var extractor = new GMailThreadExtractor(finalConfig.Email, finalConfig.Password, "imap.gmail.com", 993, timeout);
-                await extractor.ExtractThreadsAsync(finalConfig.Output, finalConfig.Search, finalConfig.Label ?? string.Empty, finalConfig.Compression ?? "lzma");
-            },
-            configOption, emailOption, passwordOption, searchOption, labelOption, outputOption, compressionOption, timeoutOption);
+                await extractor.ExtractThreadsAsync(finalConfig.Output, finalConfig.Search, finalConfig.Label ?? string.Empty, finalConfig.Compression ?? "lzma", finalConfig.MaxMessageSizeMB);
+            });
 
             return await rootCommand.InvokeAsync(args);
         }
@@ -216,3 +256,4 @@ namespace GMailThreadExtractor
         }
     }
 }
+
