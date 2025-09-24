@@ -33,13 +33,14 @@ namespace GMailThreadExtractor
             _timeout = timeout ?? TimeSpan.FromMinutes(5); // Default 5 minute timeout
         }
 
-        public async Task ExtractThreadsAsync(string outputPath, string searchQuery, string label, string compression = "lzma")
+        public async Task ExtractThreadsAsync(string outputPath, string searchQuery, string label, string compression = "lzma", int? maxMessageSizeMB = null)
         {
             // Connect to the IMAP server and authenticate
             using (var client = new ImapClient())
             {
                 // Configure timeout for all IMAP operations
                 client.Timeout = (int)_timeout.TotalMilliseconds;
+                Console.WriteLine("IMAP Timeout set to: " + client.Timeout + " ms");
 
                 await client.ConnectAsync(_imapServer, _imapPort,
                     MailKit.Security.SecureSocketOptions.SslOnConnect);
@@ -108,13 +109,15 @@ namespace GMailThreadExtractor
 
                 // Download the emails and save them in a new dictionary.
                 var emailDictionary = new Dictionary<ulong, List<MessageBlob>>();
+                var maxSizeBytes = (maxMessageSizeMB ?? 10) * 1024 * 1024; // Default 10MB limit
+
                 foreach (var thread in threads)
                 {
                     emailDictionary[thread.Key] = new List<MessageBlob>();
                     foreach (var message in thread.Value)
                     {
                         var mimeEmail = await allMail.GetMessageAsync(message.UniqueId);
-                        var email = MessageWriter.MessageToBlob(message, mimeEmail);
+                        var email = MessageWriter.MessageToBlob(message, mimeEmail, maxSizeBytes);
                         emailDictionary[thread.Key].Add(email);
                     }
                 }

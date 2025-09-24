@@ -49,7 +49,22 @@ public static class BaseCompressor
                     tarStream.PutNextEntry(tarEntry);
                     try
                     {
-                        await tarStream.WriteAsync(message.Blob);
+                        if (message.IsStreaming)
+                        {
+                            // Use streaming for large messages
+                            if (message.StreamFunc != null)
+                            {
+                                await message.StreamFunc(tarStream);
+                            }
+                        }
+                        else
+                        {
+                            // Use in-memory data for small messages
+                            if (message.Blob != null)
+                            {
+                                await tarStream.WriteAsync(message.Blob);
+                            }
+                        }
                     }
                     catch (Exception ex)
                     {

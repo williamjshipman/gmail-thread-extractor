@@ -8,5 +8,6 @@
   "label": "Important",
   "output": "extracted-emails",
   "compression": "lzma",
-  "timeoutMinutes": 5
+  "timeoutMinutes": 5,
+  "maxMessageSizeMB": 10
 }

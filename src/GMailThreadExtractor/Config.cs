@@ -44,6 +44,12 @@ namespace GMailThreadExtractor
         public int? TimeoutMinutes { get; set; }
 
         /// <summary>
+        /// Maximum message size in MB to load into memory. Messages larger than this will be processed using streaming.
+        /// Default is 10 MB.
+        /// </summary>
+        public int? MaxMessageSizeMB { get; set; }
+
+        /// <summary>
         /// Loads configuration from a JSON file.
         /// </summary>
         /// <param name="configPath">The path to the JSON config file.</param>
@@ -86,8 +92,9 @@ namespace GMailThreadExtractor
         /// <param name="cmdOutput">Command-line output value.</param>
         /// <param name="cmdCompression">Command-line compression value.</param>
         /// <param name="cmdTimeoutMinutes">Command-line timeout value.</param>
+        /// <param name="cmdMaxMessageSizeMB">Command-line max message size value.</param>
         /// <returns>A new Config object with merged values.</returns>
-        public Config MergeWithCommandLine(string? cmdEmail, string? cmdPassword, string? cmdSearch, string? cmdLabel, string? cmdOutput, string? cmdCompression, int? cmdTimeoutMinutes)
+        public Config MergeWithCommandLine(string? cmdEmail, string? cmdPassword, string? cmdSearch, string? cmdLabel, string? cmdOutput, string? cmdCompression, int? cmdTimeoutMinutes, int? cmdMaxMessageSizeMB = null)
         {
             return new Config
             {
@@ -97,7 +104,8 @@ namespace GMailThreadExtractor
                 Label = !string.IsNullOrWhiteSpace(cmdLabel) ? cmdLabel : Label,
                 Output = !string.IsNullOrWhiteSpace(cmdOutput) ? cmdOutput : Output,
                 Compression = !string.IsNullOrWhiteSpace(cmdCompression) ? cmdCompression : Compression,
-                TimeoutMinutes = cmdTimeoutMinutes.HasValue ? cmdTimeoutMinutes : TimeoutMinutes
+                TimeoutMinutes = cmdTimeoutMinutes.HasValue ? cmdTimeoutMinutes : TimeoutMinutes,
+                MaxMessageSizeMB = cmdMaxMessageSizeMB.HasValue ? cmdMaxMessageSizeMB : MaxMessageSizeMB
             };
         }
     }
