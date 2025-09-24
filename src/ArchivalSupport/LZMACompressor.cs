@@ -17,9 +17,9 @@ public class LZMACompressor : ICompressor
     private const int LZMA_ALGORITHM = 2; // LZMA algorithm
 
     /// <summary>
-    /// The dictionary size for LZMA compression (256 MB).
+    /// The dictionary size for LZMA compression (64 MB).
     /// </summary>
-    private const int LZMA_DICTIONARY_SIZE = 256 * 1024 * 1024; // 256 MB dictionary size
+    private const int LZMA_DICTIONARY_SIZE = 64 * 1024 * 1024; // 16 MB dictionary size
 
     /// <summary>
     /// The number of fast bytes used by the LZMA encoder (128).
