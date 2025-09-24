@@ -145,26 +145,22 @@ namespace GMailThreadExtractor
                     outputPath = outputPath + expectedExtension;
                 }
 
-                // Download the emails and save them in a new dictionary.
-                var emailDictionary = new Dictionary<ulong, List<MessageBlob>>();
-                var maxSizeBytes = (maxMessageSizeMB ?? 10) * 1024 * 1024; // Default 10MB limit
+                // Use streaming compression to minimize memory usage
+                var maxSizeMB = maxMessageSizeMB ?? 10; // Default 10MB limit
 
-                foreach (var thread in threads)
+                // Create message fetcher delegate for streaming
+                MessageFetcher messageFetcher = async (messageSummary) =>
                 {
-                    emailDictionary[thread.Key] = new List<MessageBlob>();
-                    foreach (var message in thread.Value)
-                    {
-                        // Download email message with retry logic
-                        var mimeEmail = await RetryHelper.ExecuteWithRetryAsync(
-                            async () => await allMail.GetMessageAsync(message.UniqueId),
-                            maxAttempts: 3,
-                            baseDelay: TimeSpan.FromSeconds(1),
-                            operationName: $"downloading message {message.UniqueId}");
+                    // Download email message with retry logic
+                    var mimeEmail = await RetryHelper.ExecuteWithRetryAsync(
+                        async () => await allMail.GetMessageAsync(messageSummary.UniqueId),
+                        maxAttempts: 3,
+                        baseDelay: TimeSpan.FromSeconds(1),
+                        operationName: $"downloading message {messageSummary.UniqueId}");
 
-                        var email = MessageWriter.MessageToBlob(message, mimeEmail, maxSizeBytes);
-                        emailDictionary[thread.Key].Add(email);
-                    }
-                }
+                    var maxSizeBytes = maxSizeMB * 1024L * 1024L;
+                    return MessageWriter.MessageToBlob(messageSummary, mimeEmail, maxSizeBytes);
+                };
 
                 // Select compressor based on compression method
                 ICompressor compressor;
@@ -178,7 +174,10 @@ namespace GMailThreadExtractor
                         compressor = new LZMACompressor();
                         break;
                 }
-                await compressor.Compress(outputPath, emailDictionary);
+
+                // Use streaming compression instead of pre-loading all messages
+                Console.WriteLine("Starting streaming compression to minimize memory usage...");
+                await compressor.CompressStreaming(outputPath, threads, messageFetcher, maxSizeMB);
                 Console.WriteLine($"All done! Emails saved to {outputPath}");
             }
         }

@@ -100,13 +100,14 @@ internal static class SafeNameBuilder
         return name;
     }
 
-    public static string BuildMessageFileName(string uniqueId, string? subject, string dateSegment)
+    public static string BuildMessageFileName(string uniqueId, string? subject, string dateSegment, string? from = null)
     {
         const string Extension = ".eml";
         var coreMaxLength = MaxTarNameLength - Extension.Length;
 
         var safeUid = Sanitize(uniqueId, "uid", enforceLength: false);
         var safeDate = Sanitize(dateSegment, "date");
+        var safeFrom = Sanitize(ExtractSenderName(from), string.Empty);
         var safeSubject = Sanitize(subject, string.Empty);
 
         if (safeUid.Length > MaxSegmentLength)
@@ -114,20 +115,35 @@ internal static class SafeNameBuilder
             safeUid = safeUid[..MaxSegmentLength];
         }
 
+        // Build core with UID and date
         var core = $"{safeUid}_{safeDate}";
         var remaining = coreMaxLength - core.Length;
 
+        // Add sender name if there's space and it exists
+        if (!string.IsNullOrEmpty(safeFrom) && remaining > 1)
+        {
+            remaining -= 1; // Account for underscore
+            if (remaining > 0)
+            {
+                if (safeFrom.Length > remaining)
+                {
+                    safeFrom = safeFrom[..remaining];
+                }
+                core = $"{core}_{safeFrom}";
+                remaining = coreMaxLength - core.Length;
+            }
+        }
+
+        // Add subject if there's space and it exists
         if (!string.IsNullOrEmpty(safeSubject) && remaining > 1)
         {
-            // Account for joining underscore.
-            remaining -= 1;
+            remaining -= 1; // Account for underscore
             if (remaining > 0)
             {
                 if (safeSubject.Length > remaining)
                 {
                     safeSubject = safeSubject[..remaining];
                 }
-
                 core = $"{core}_{safeSubject}";
             }
         }
@@ -138,5 +154,42 @@ internal static class SafeNameBuilder
         }
 
         return $"{core}{Extension}";
+    }
+
+    /// <summary>
+    /// Extracts the sender name from an email address or name/email combination.
+    /// </summary>
+    /// <param name="from">The from field which could be "Name &lt;email@domain.com&gt;" or just "email@domain.com"</param>
+    /// <returns>The extracted name or email username if no name is present</returns>
+    private static string ExtractSenderName(string? from)
+    {
+        if (string.IsNullOrWhiteSpace(from))
+            return string.Empty;
+
+        // Handle format: "Display Name <email@domain.com>"
+        var angleStart = from.IndexOf('<');
+        if (angleStart > 0)
+        {
+            var displayName = from[..angleStart].Trim();
+            if (!string.IsNullOrEmpty(displayName))
+            {
+                // Remove quotes if present
+                if (displayName.StartsWith('"') && displayName.EndsWith('"'))
+                {
+                    displayName = displayName[1..^1];
+                }
+                return displayName;
+            }
+        }
+
+        // Handle just email address: extract username part
+        var atIndex = from.IndexOf('@');
+        if (atIndex > 0)
+        {
+            return from[..atIndex];
+        }
+
+        // Return as-is if we can't parse it
+        return from;
     }
 }
