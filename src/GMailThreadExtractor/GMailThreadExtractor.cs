@@ -72,26 +72,11 @@ namespace GMailThreadExtractor
                     MessageSummaryItems.GMailThreadId |
                     MessageSummaryItems.Size);
 
-                var threads = new Dictionary<ulong, List<IMessageSummary>>();
-                foreach (var message in messages)
-                {
-                    if (message.GMailThreadId.HasValue)
-                    {
-                        ulong threadId = message.GMailThreadId.Value;
-                        if (threads.ContainsKey(threadId))
-                        {
-                            continue; // Skip if we already have this thread.
-                        }
-                        var threadUuids = await allMail.SearchAsync(SearchQuery.All.And(SearchQuery.GMailThreadId(threadId)));
-                        var threadList = await allMail.FetchAsync(threadUuids,
-                            MessageSummaryItems.BodyStructure |
-                            MessageSummaryItems.Envelope |
-                            MessageSummaryItems.UniqueId |
-                            MessageSummaryItems.GMailThreadId |
-                            MessageSummaryItems.Size);
-                        threads[threadId] = threadList.ToList();
-                    }
-                }
+                // Group messages by thread ID - this fixes both the logic bug and performance issue
+                var threads = messages
+                    .Where(m => m.GMailThreadId.HasValue)
+                    .GroupBy(m => m.GMailThreadId!.Value)
+                    .ToDictionary(g => g.Key, g => g.ToList());
 
                 Console.WriteLine($"Found {threads.Count} threads.");
 
