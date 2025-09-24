@@ -2,6 +2,7 @@
 using ICSharpCode.SharpZipLib.Tar;
 using SevenZip;
 using MailKit;
+using Shared;
 
 namespace ArchivalSupport;
 
@@ -105,7 +106,10 @@ public class LZMACompressor : ICompressor
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error during compression: {ex.Message}");
+            ErrorHandler.Handle(ErrorCategory.Compression,
+                "LZMA compression failed",
+                ex,
+                $"Output file: {outputPath}");
             try
             {
                 // Delete the output file if it exists and is potentially corrupted
@@ -188,7 +192,10 @@ public class LZMACompressor : ICompressor
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error during streaming compression: {ex.Message}");
+            ErrorHandler.Handle(ErrorCategory.Compression,
+                "LZMA streaming compression failed",
+                ex,
+                $"Output file: {outputPath}");
             try
             {
                 // Delete the output file if it exists and is potentially corrupted
