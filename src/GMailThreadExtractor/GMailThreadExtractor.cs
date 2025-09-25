@@ -8,6 +8,8 @@ using ICSharpCode.SharpZipLib.Tar;
 using SevenZip;
 using System.Text;
 using ArchivalSupport;
+using Shared;
+using Serilog;
 
 namespace GMailThreadExtractor
 {
@@ -40,7 +42,7 @@ namespace GMailThreadExtractor
             {
                 // Configure timeout for all IMAP operations
                 client.Timeout = (int)_timeout.TotalMilliseconds;
-                Console.WriteLine("IMAP Timeout set to: " + client.Timeout + " ms");
+                LoggingConfiguration.Logger.Information("IMAP Timeout set to: {TimeoutMs} ms", client.Timeout);
 
                 // Connect with retry logic
                 await RetryHelper.ExecuteWithRetryAsync(
@@ -131,7 +133,7 @@ namespace GMailThreadExtractor
                     }
                 }
 
-                Console.WriteLine($"Found {threads.Count} threads.");
+                LoggingConfiguration.Logger.Information("Found {ThreadCount} threads.", threads.Count);
 
                 // Determine file extension based on compression method
                 var expectedExtension = compression.ToLowerInvariant() switch
@@ -176,9 +178,9 @@ namespace GMailThreadExtractor
                 }
 
                 // Use streaming compression instead of pre-loading all messages
-                Console.WriteLine("Starting streaming compression to minimize memory usage...");
+                LoggingConfiguration.Logger.Information("Starting streaming compression to minimize memory usage...");
                 await compressor.CompressStreaming(outputPath, threads, messageFetcher, maxSizeMB);
-                Console.WriteLine($"All done! Emails saved to {outputPath}");
+                LoggingConfiguration.Logger.Information("All done! Emails saved to {OutputPath}", outputPath);
             }
         }
     }

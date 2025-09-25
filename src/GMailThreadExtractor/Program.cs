@@ -2,6 +2,8 @@ using System;
 using System.CommandLine;
 using System.CommandLine.Invocation;
 using System.Text;
+using Shared;
+using Serilog;
 
 namespace GMailThreadExtractor
 {
@@ -17,6 +19,9 @@ namespace GMailThreadExtractor
         /// <returns>The process exit code produced by System.CommandLine.</returns>
         static async Task<int> Main(string[] args)
         {
+            // Initialize logging early
+            LoggingConfiguration.Initialize();
+
             var configOption = new Option<string>(
                 name: "--config",
                 description: "Path to the JSON configuration file.")
@@ -183,7 +188,14 @@ namespace GMailThreadExtractor
                 await extractor.ExtractThreadsAsync(finalConfig.Output, finalConfig.Search, finalConfig.Label ?? string.Empty, finalConfig.Compression ?? "lzma", finalConfig.MaxMessageSizeMB);
             });
 
-            return await rootCommand.InvokeAsync(args);
+            try
+            {
+                return await rootCommand.InvokeAsync(args);
+            }
+            finally
+            {
+                LoggingConfiguration.CloseAndFlush();
+            }
         }
 
         /// <summary>

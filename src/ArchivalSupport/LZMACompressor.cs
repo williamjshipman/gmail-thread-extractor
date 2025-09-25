@@ -118,7 +118,7 @@ public class LZMACompressor : ICompressor
             }
             catch (Exception ex2)
             {
-                Console.WriteLine($"Warning: Unable to delete output file {outputPath}. {ex2.Message}");
+                LoggingConfiguration.Logger.Warning("Unable to delete output file {OutputPath}: {ErrorMessage}", outputPath, ex2.Message);
             }
             throw; // Re-throw to maintain error handling contract
         }
@@ -132,7 +132,7 @@ public class LZMACompressor : ICompressor
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Warning: Unable to delete temporary file {tempTarFilePath}. {ex.Message}");
+                LoggingConfiguration.Logger.Warning("Unable to delete temporary file {TempFilePath}: {ErrorMessage}", tempTarFilePath, ex.Message);
             }
         }
     }
@@ -153,7 +153,7 @@ public class LZMACompressor : ICompressor
 
         try
         {
-            Console.WriteLine("LZMA streaming compression: Creating tar archive...");
+            LoggingConfiguration.Logger.Information("LZMA streaming compression: Creating tar archive...");
 
             // Pass 1: Create tar file using streaming (one message at a time)
             using (var tempFileStream = new FileStream(tempTarFilePath, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 8192))
@@ -164,7 +164,7 @@ public class LZMACompressor : ICompressor
                 }
             }
 
-            Console.WriteLine("LZMA streaming compression: Compressing tar archive...");
+            LoggingConfiguration.Logger.Information("LZMA streaming compression: Compressing tar archive...");
 
             // Pass 2: Compress the tar file with streaming I/O
             var tempFileInfo = new FileInfo(tempTarFilePath);
@@ -188,7 +188,7 @@ public class LZMACompressor : ICompressor
                 await outputStream.FlushAsync();
             }
 
-            Console.WriteLine("LZMA streaming compression: Complete!");
+            LoggingConfiguration.Logger.Information("LZMA streaming compression: Complete!");
         }
         catch (Exception ex)
         {
@@ -204,7 +204,7 @@ public class LZMACompressor : ICompressor
             }
             catch (Exception ex2)
             {
-                Console.WriteLine($"Warning: Unable to delete output file {outputPath}. {ex2.Message}");
+                LoggingConfiguration.Logger.Warning("Unable to delete output file {OutputPath}: {ErrorMessage}", outputPath, ex2.Message);
             }
             throw; // Re-throw to maintain error handling contract
         }
@@ -218,7 +218,7 @@ public class LZMACompressor : ICompressor
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Warning: Unable to delete temporary file {tempTarFilePath}. {ex.Message}");
+                LoggingConfiguration.Logger.Warning("Unable to delete temporary file {TempFilePath}: {ErrorMessage}", tempTarFilePath, ex.Message);
             }
         }
     }

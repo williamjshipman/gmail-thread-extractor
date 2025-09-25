@@ -1,5 +1,7 @@
 using MailKit;
 using MimeKit;
+using Shared;
+using Serilog;
 
 namespace ArchivalSupport
 {
@@ -37,7 +39,7 @@ namespace ArchivalSupport
 
             if (reportedSize > maxSizeBytes)
             {
-                Console.WriteLine($"Message {msgSummary?.UniqueId.ToString() ?? "unknown"} ({reportedSize:N0} bytes) will use streaming");
+                LoggingConfiguration.Logger.Debug("Message {MessageId} ({MessageSize:N0} bytes) will use streaming", msgSummary?.UniqueId.ToString() ?? "unknown", reportedSize);
                 return new MessageBlob(
                     msgSummary?.UniqueId.ToString() ?? "unknown",
                     async stream =>
@@ -66,7 +68,7 @@ namespace ArchivalSupport
                     message.Date.UtcDateTime);
             }
 
-            Console.WriteLine($"Message {msgSummary?.UniqueId.ToString() ?? "unknown"} ({probe.Length:N0} bytes) will use streaming");
+            LoggingConfiguration.Logger.Debug("Message {MessageId} ({MessageSize:N0} bytes) will use streaming", msgSummary?.UniqueId.ToString() ?? "unknown", probe.Length);
 
             return new MessageBlob(
                 msgSummary?.UniqueId.ToString() ?? "unknown",

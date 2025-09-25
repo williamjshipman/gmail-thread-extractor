@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Shared;
+using Serilog;
 
 namespace GMailThreadExtractor
 {
@@ -59,7 +60,7 @@ namespace GMailThreadExtractor
         {
             if (!File.Exists(configPath))
             {
-                Console.WriteLine($"Config file not found: {configPath}");
+                LoggingConfiguration.Logger.Warning("Config file not found: {ConfigPath}", configPath);
                 return new Config();
             }
 
@@ -73,7 +74,7 @@ namespace GMailThreadExtractor
                     ReadCommentHandling = JsonCommentHandling.Skip
                 });
 
-                Console.WriteLine($"Config loaded from: {configPath}");
+                LoggingConfiguration.Logger.Information("Config loaded from: {ConfigPath}", configPath);
                 var finalConfig = config ?? new Config();
 
                 // Validate the loaded configuration
@@ -101,7 +102,7 @@ namespace GMailThreadExtractor
                 }
 
                 // Return empty config as fallback
-                Console.WriteLine($"Using default configuration due to error loading {configPath}");
+                LoggingConfiguration.Logger.Warning("Using default configuration due to error loading {ConfigPath}", configPath);
                 return new Config();
             }
         }
