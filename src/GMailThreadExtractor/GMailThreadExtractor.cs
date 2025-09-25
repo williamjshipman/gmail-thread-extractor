@@ -1,15 +1,7 @@
-
-using System.IO.Compression;
 using MailKit;
 using MailKit.Net.Imap;
 using MailKit.Search;
-using MimeKit;
-using ICSharpCode.SharpZipLib.Tar;
-using SevenZip;
-using System.Text;
 using ArchivalSupport;
-using Shared;
-using Serilog;
 
 namespace GMailThreadExtractor
 {
@@ -142,7 +134,7 @@ namespace GMailThreadExtractor
                     _ => ".tar.lzma" // Default to LZMA
                 };
 
-                if (!outputPath.EndsWith(expectedExtension))
+                if (!outputPath.EndsWith(expectedExtension, StringComparison.OrdinalIgnoreCase))
                 {
                     outputPath = outputPath + expectedExtension;
                 }
