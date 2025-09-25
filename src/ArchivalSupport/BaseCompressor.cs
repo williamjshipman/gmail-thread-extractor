@@ -113,8 +113,6 @@ public static class BaseCompressor
         MessageFetcher messageFetcher,
         int maxMessageSizeMB = 10)
     {
-        var maxSizeBytes = maxMessageSizeMB * 1024L * 1024L; // Convert to bytes
-
         foreach (var thread in threads)
         {
             if (thread.Value.Count == 0)
@@ -178,13 +176,6 @@ public static class BaseCompressor
                     }
 
                     LoggingConfiguration.Logger.Debug("Saved message to: {OutputPath}", $"{outputPath}/{outputEmlPath}");
-
-                    // Force garbage collection after each message to minimize memory usage
-                    if (messageBlob.Size > maxSizeBytes / 2) // GC for messages > 5MB by default
-                    {
-                        GC.Collect();
-                        GC.WaitForPendingFinalizers();
-                    }
                 }
                 catch (Exception ex)
                 {
