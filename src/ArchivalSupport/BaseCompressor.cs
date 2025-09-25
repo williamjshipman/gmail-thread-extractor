@@ -25,7 +25,7 @@ public static class BaseCompressor
         {
             if (thread.Value.Count == 0)
             {
-                Console.WriteLine($"Thread ID: {thread.Key} contained no messages. Skipping.");
+                LoggingConfiguration.Logger.Warning("Thread ID: {ThreadId} contained no messages. Skipping.", thread.Key);
                 continue;
             }
 
@@ -35,13 +35,13 @@ public static class BaseCompressor
             tarStream.PutNextEntry(folderEntry);
             tarStream.CloseEntry();
 
-            Console.WriteLine($"Thread ID: {thread.Key}");
+            LoggingConfiguration.Logger.Information("Processing Thread ID: {ThreadId}", thread.Key);
 
             foreach (var message in thread.Value)
             {
                 try
                 {
-                    Console.WriteLine(message.ToString());
+                    LoggingConfiguration.Logger.Debug("Processing message: {MessageInfo}", message.ToString());
 
                     // Save the message to the tar file
                     var outputEmlPath = $"{folderName}{message.FileName}";
@@ -80,8 +80,7 @@ public static class BaseCompressor
                         tarStream.CloseEntry();
                     }
 
-                    Console.WriteLine($"Saved to: {outputPath}/{outputEmlPath}");
-                    Console.WriteLine();
+                    LoggingConfiguration.Logger.Debug("Saved message to: {OutputPath}", $"{outputPath}/{outputEmlPath}");
                 }
                 catch (Exception ex)
                 {
@@ -92,7 +91,7 @@ public static class BaseCompressor
                 }
             }
 
-            Console.WriteLine($"Saved thread to: {outputPath}/{folderName}");
+            LoggingConfiguration.Logger.Information("Saved thread to: {ThreadPath}", $"{outputPath}/{folderName}");
         }
 
         await tarStream.FlushAsync();
@@ -120,7 +119,7 @@ public static class BaseCompressor
         {
             if (thread.Value.Count == 0)
             {
-                Console.WriteLine($"Thread ID: {thread.Key} contained no messages. Skipping.");
+                LoggingConfiguration.Logger.Warning("Thread ID: {ThreadId} contained no messages. Skipping.", thread.Key);
                 continue;
             }
 
@@ -130,13 +129,13 @@ public static class BaseCompressor
             tarStream.PutNextEntry(folderEntry);
             tarStream.CloseEntry();
 
-            Console.WriteLine($"Thread ID: {thread.Key}");
+            LoggingConfiguration.Logger.Information("Processing Thread ID: {ThreadId}", thread.Key);
 
             foreach (var messageSummary in thread.Value)
             {
                 try
                 {
-                    Console.WriteLine($"Processing message {messageSummary.UniqueId} (Subject: {messageSummary.Envelope?.Subject ?? "No Subject"})");
+                    LoggingConfiguration.Logger.Debug("Processing message {MessageId} (Subject: {Subject})", messageSummary.UniqueId, messageSummary.Envelope?.Subject ?? "No Subject");
 
                     // Fetch message on-demand
                     var messageBlob = await messageFetcher(messageSummary);
@@ -178,8 +177,7 @@ public static class BaseCompressor
                         tarStream.CloseEntry();
                     }
 
-                    Console.WriteLine($"Saved to: {outputPath}/{outputEmlPath}");
-                    Console.WriteLine();
+                    LoggingConfiguration.Logger.Debug("Saved message to: {OutputPath}", $"{outputPath}/{outputEmlPath}");
 
                     // Force garbage collection after each message to minimize memory usage
                     if (messageBlob.Size > maxSizeBytes / 2) // GC for messages > 5MB by default
@@ -197,7 +195,7 @@ public static class BaseCompressor
                 }
             }
 
-            Console.WriteLine($"Saved thread to: {outputPath}/{folderName}");
+            LoggingConfiguration.Logger.Information("Saved thread to: {ThreadPath}", $"{outputPath}/{folderName}");
         }
 
         await tarStream.FlushAsync();

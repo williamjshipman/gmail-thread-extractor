@@ -57,7 +57,7 @@ public class TarGzipCompressor : ICompressor
             }
             catch (Exception ex2)
             {
-                Console.WriteLine($"Warning: Unable to delete corrupted output file {outputPath}. {ex2.Message}");
+                LoggingConfiguration.Logger.Warning("Unable to delete corrupted output file {OutputPath}: {ErrorMessage}", outputPath, ex2.Message);
             }
 
             // Re-throw the original exception to maintain proper error propagation
@@ -107,7 +107,7 @@ public class TarGzipCompressor : ICompressor
             }
             catch (Exception ex2)
             {
-                Console.WriteLine($"Warning: Unable to delete corrupted output file {outputPath}. {ex2.Message}");
+                LoggingConfiguration.Logger.Warning("Unable to delete corrupted output file {OutputPath}: {ErrorMessage}", outputPath, ex2.Message);
             }
 
             // Re-throw the original exception to maintain proper error propagation

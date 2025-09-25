@@ -1,5 +1,7 @@
 using System;
 using System.Threading.Tasks;
+using Shared;
+using Serilog;
 
 namespace GMailThreadExtractor
 {
@@ -35,7 +37,7 @@ namespace GMailThreadExtractor
             {
                 try
                 {
-                    Console.WriteLine($"Attempting {operationName} (attempt {attempt}/{maxAttempts})");
+                    LoggingConfiguration.Logger.Debug("Attempting {OperationName} (attempt {Attempt}/{MaxAttempts})", operationName, attempt, maxAttempts);
                     return await operation();
                 }
                 catch (Exception ex) when (IsRetryableException(ex) && attempt < maxAttempts)
@@ -48,8 +50,8 @@ namespace GMailThreadExtractor
                             baseDelay.Value.TotalMilliseconds * Math.Pow(2, attempt - 1),
                             maxDelay.Value.TotalMilliseconds));
 
-                    Console.WriteLine($"{operationName} failed (attempt {attempt}/{maxAttempts}): {ex.Message}");
-                    Console.WriteLine($"Retrying in {delay.TotalSeconds:F1} seconds...");
+                    LoggingConfiguration.Logger.Warning("{OperationName} failed (attempt {Attempt}/{MaxAttempts}): {ErrorMessage}", operationName, attempt, maxAttempts, ex.Message);
+                    LoggingConfiguration.Logger.Information("Retrying in {DelaySeconds:F1} seconds...", delay.TotalSeconds);
 
                     await Task.Delay(delay);
                 }
@@ -58,7 +60,7 @@ namespace GMailThreadExtractor
                     exceptions.Add(ex);
 
                     // Non-retryable exception or final attempt
-                    Console.WriteLine($"{operationName} failed permanently: {ex.Message}");
+                    LoggingConfiguration.Logger.Error("{OperationName} failed permanently: {ErrorMessage}", operationName, ex.Message);
                     throw new AggregateException($"Operation '{operationName}' failed after {attempt} attempts", exceptions);
                 }
             }

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using Serilog;
 
 namespace Shared
 {
@@ -231,23 +232,22 @@ namespace Shared
 
         private static void LogError(StructuredError error, ErrorHandlingStrategy strategy)
         {
-            var prefix = strategy switch
+            var logger = LoggingConfiguration.Logger;
+
+            var logLevel = strategy switch
             {
-                ErrorHandlingStrategy.LogAndContinue => "[WARN]",
-                ErrorHandlingStrategy.LogAndSkip => "[WARN]",
-                ErrorHandlingStrategy.LogAndThrow => "[ERROR]",
-                ErrorHandlingStrategy.LogAndTerminate => "[FATAL]",
-                _ => "[ERROR]"
+                ErrorHandlingStrategy.LogAndContinue => Serilog.Events.LogEventLevel.Warning,
+                ErrorHandlingStrategy.LogAndSkip => Serilog.Events.LogEventLevel.Warning,
+                ErrorHandlingStrategy.LogAndThrow => Serilog.Events.LogEventLevel.Error,
+                ErrorHandlingStrategy.LogAndTerminate => Serilog.Events.LogEventLevel.Fatal,
+                _ => Serilog.Events.LogEventLevel.Error
             };
 
-            var contextInfo = string.IsNullOrEmpty(error.Context) ? "" : $" [{error.Context}]";
-
-            Console.WriteLine($"{prefix} {error.Category}{contextInfo}: {error.Message}");
-
-            if (error.InnerException != null)
-            {
-                Console.WriteLine($"       Inner Exception: {error.InnerException.GetType().Name}: {error.InnerException.Message}");
-            }
+            logger.Write(logLevel, error.InnerException,
+                "{ErrorCategory} error: {ErrorMessage} {Context}",
+                error.Category,
+                error.Message,
+                error.Context ?? "");
         }
 
         private static bool ExecuteStrategy(ErrorHandlingStrategy strategy, StructuredError error)
