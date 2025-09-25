@@ -239,11 +239,25 @@ namespace GMailThreadExtractor
         /// <returns>The string entered by the user.</returns>
         private static string ReadHiddenInput()
         {
+            if (Console.IsInputRedirected)
+            {
+                return Console.ReadLine() ?? string.Empty;
+            }
+
             var builder = new StringBuilder();
 
             while (true)
             {
-                var keyInfo = Console.ReadKey(intercept: true); // Intercept prevents the character from being displayed.
+                ConsoleKeyInfo keyInfo;
+                try
+                {
+                    keyInfo = Console.ReadKey(intercept: true); // Intercept prevents the character from being displayed.
+                }
+                catch (InvalidOperationException)
+                {
+                    // Input is redirected or not available, fallback to line-based read.
+                    return Console.ReadLine() ?? string.Empty;
+                }
 
                 if (keyInfo.Key == ConsoleKey.Enter)
                 {
