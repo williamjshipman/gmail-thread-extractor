@@ -20,7 +20,7 @@ namespace GMailThreadExtractor
         /// <param name="maxDelay">Maximum delay between retries (default: 30 seconds).</param>
         /// <param name="operationName">Name of the operation for logging purposes.</param>
         /// <returns>The result of the successful operation.</returns>
-        /// <exception cref="AggregateException">Thrown when all retry attempts fail.</exception>
+        /// <exception cref="Exception">Throws the final exception from the operation when retries are exhausted.</exception>
         public static async Task<T> ExecuteWithRetryAsync<T>(
             Func<Task<T>> operation,
             int maxAttempts = 3,
@@ -31,8 +31,6 @@ namespace GMailThreadExtractor
             baseDelay ??= TimeSpan.FromSeconds(1);
             maxDelay ??= TimeSpan.FromSeconds(30);
 
-            var exceptions = new List<Exception>();
-
             for (int attempt = 1; attempt <= maxAttempts; attempt++)
             {
                 try
@@ -40,33 +38,34 @@ namespace GMailThreadExtractor
                     LoggingConfiguration.Logger.Debug("Attempting {OperationName} (attempt {Attempt}/{MaxAttempts})", operationName, attempt, maxAttempts);
                     return await operation();
                 }
-                catch (Exception ex) when (IsRetryableException(ex) && attempt < maxAttempts)
-                {
-                    exceptions.Add(ex);
-
-                    // Calculate exponential backoff delay: baseDelay * 2^(attempt-1)
-                    var delay = TimeSpan.FromMilliseconds(
-                        Math.Min(
-                            baseDelay.Value.TotalMilliseconds * Math.Pow(2, attempt - 1),
-                            maxDelay.Value.TotalMilliseconds));
-
-                    LoggingConfiguration.Logger.Warning("{OperationName} failed (attempt {Attempt}/{MaxAttempts}): {ErrorMessage}", operationName, attempt, maxAttempts, ex.Message);
-                    LoggingConfiguration.Logger.Information("Retrying in {DelaySeconds:F1} seconds...", delay.TotalSeconds);
-
-                    await Task.Delay(delay);
-                }
                 catch (Exception ex)
                 {
-                    exceptions.Add(ex);
+                    var isRetryable = IsRetryableException(ex);
+                    var finalAttempt = attempt >= maxAttempts;
 
-                    // Non-retryable exception or final attempt
+                    if (isRetryable && !finalAttempt)
+                    {
+                        // Calculate exponential backoff delay: baseDelay * 2^(attempt-1)
+                        var delay = TimeSpan.FromMilliseconds(
+                            Math.Min(
+                                baseDelay.Value.TotalMilliseconds * Math.Pow(2, attempt - 1),
+                                maxDelay.Value.TotalMilliseconds));
+
+                        LoggingConfiguration.Logger.Warning("{OperationName} failed (attempt {Attempt}/{MaxAttempts}): {ErrorMessage}", operationName, attempt, maxAttempts, ex.Message);
+                        LoggingConfiguration.Logger.Information("Retrying in {DelaySeconds:F1} seconds...", delay.TotalSeconds);
+
+                        await Task.Delay(delay);
+                        continue;
+                    }
+
+                    // Non-retryable exception or final attempt: log and surface original exception
                     LoggingConfiguration.Logger.Error("{OperationName} failed permanently: {ErrorMessage}", operationName, ex.Message);
-                    throw new AggregateException($"Operation '{operationName}' failed after {attempt} attempts", exceptions);
+                    throw;
                 }
             }
 
             // This should never be reached, but just in case
-            throw new AggregateException($"Operation '{operationName}' failed after {maxAttempts} attempts", exceptions);
+            throw new InvalidOperationException($"Operation '{operationName}' exhausted retries without returning a result.");
         }
 
         /// <summary>
@@ -77,7 +76,7 @@ namespace GMailThreadExtractor
         /// <param name="baseDelay">Base delay between retries (default: 1 second).</param>
         /// <param name="maxDelay">Maximum delay between retries (default: 30 seconds).</param>
         /// <param name="operationName">Name of the operation for logging purposes.</param>
-        /// <exception cref="AggregateException">Thrown when all retry attempts fail.</exception>
+        /// <exception cref="Exception">Throws the final exception from the operation when retries are exhausted.</exception>
         public static async Task ExecuteWithRetryAsync(
             Func<Task> operation,
             int maxAttempts = 3,

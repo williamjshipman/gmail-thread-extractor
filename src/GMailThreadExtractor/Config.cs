@@ -84,14 +84,23 @@ namespace GMailThreadExtractor
                 }
                 catch (ArgumentException ex)
                 {
-                    ErrorHandler.Handle(ErrorCategory.Configuration,
+                    LoggingConfiguration.Logger.Error(
+                        "Invalid configuration in file '{ConfigPath}': {ErrorMessage}",
+                        configPath,
+                        ex.Message);
+
+                    // Surface the original validation error so callers can react appropriately.
+                    throw new ArgumentException(
                         $"Invalid configuration in file '{configPath}': {ex.Message}",
-                        ex,
-                        $"Config file: {configPath}");
-                    // This will throw due to Configuration category default strategy
+                        ex);
                 }
 
                 return finalConfig;
+            }
+            catch (ArgumentException)
+            {
+                // Validation errors are already logged with specific context; surface them to callers.
+                throw;
             }
             catch (Exception ex)
             {
