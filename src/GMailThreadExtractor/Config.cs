@@ -64,56 +64,43 @@ namespace GMailThreadExtractor
                 return new Config();
             }
 
+            var jsonContent = await File.ReadAllTextAsync(configPath);
+            Config? config;
             try
             {
-                var jsonContent = await File.ReadAllTextAsync(configPath);
-                var config = JsonSerializer.Deserialize<Config>(jsonContent, new JsonSerializerOptions
+                config = JsonSerializer.Deserialize<Config>(jsonContent, new JsonSerializerOptions
                 {
                     PropertyNameCaseInsensitive = true,
                     AllowTrailingCommas = true,
                     ReadCommentHandling = JsonCommentHandling.Skip
                 });
-
-                LoggingConfiguration.Logger.Information("Config loaded from: {ConfigPath}", configPath);
-                var finalConfig = config ?? new Config();
-
-                // Validate the loaded configuration
-                try
-                {
-                    finalConfig.Validate();
-                }
-                catch (ArgumentException ex)
-                {
-                    LoggingConfiguration.Logger.Error(
-                        "Invalid configuration in file '{ConfigPath}': {ErrorMessage}",
-                        configPath,
-                        ex.Message);
-
-                    // Surface the original validation error so callers can react appropriately.
-                    throw new ArgumentException(
-                        $"Invalid configuration in file '{configPath}': {ex.Message}",
-                        ex);
-                }
-
-                return finalConfig;
             }
-            catch (ArgumentException)
+            catch (JsonException ex)
             {
-                // Validation errors are already logged with specific context; surface them to callers.
-                throw;
+                LoggingConfiguration.Logger.Error(
+                    "Failed to parse configuration file '{ConfigPath}': {ErrorMessage}",
+                    configPath,
+                    ex.Message);
+                throw new ArgumentException($"Invalid configuration file '{configPath}': {ex.Message}", ex);
             }
-            catch (Exception ex)
-            {
-                // Use standardized error handling for config loading failures
-                if (!ErrorHandler.HandleException(ex, $"Loading config file: {configPath}", ErrorHandlingStrategy.LogAndContinue))
-                {
-                    throw;
-                }
 
-                // Return empty config as fallback
-                LoggingConfiguration.Logger.Warning("Using default configuration due to error loading {ConfigPath}", configPath);
-                return new Config();
+            LoggingConfiguration.Logger.Information("Config loaded from: {ConfigPath}", configPath);
+            var finalConfig = config ?? new Config();
+
+            try
+            {
+                finalConfig.Validate();
             }
+            catch (ArgumentException ex)
+            {
+                LoggingConfiguration.Logger.Error(
+                    "Invalid configuration in file '{ConfigPath}': {ErrorMessage}",
+                    configPath,
+                    ex.Message);
+                throw new ArgumentException($"Invalid configuration in file '{configPath}': {ex.Message}", ex);
+            }
+
+            return finalConfig;
         }
 
         /// <summary>
