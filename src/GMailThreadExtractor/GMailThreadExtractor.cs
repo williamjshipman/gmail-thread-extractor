@@ -28,6 +28,49 @@ namespace GMailThreadExtractor
             _timeout = timeout ?? TimeSpan.FromMinutes(5); // Default 5 minute timeout
         }
 
+        private static string EnsureExpectedExtension(string outputPath, string expectedExtension)
+        {
+            if (string.IsNullOrWhiteSpace(outputPath))
+            {
+                return expectedExtension.TrimStart('.');
+            }
+
+            var normalizedExpected = expectedExtension.StartsWith('.') ? expectedExtension : "." + expectedExtension;
+
+            if (outputPath.EndsWith(normalizedExpected, StringComparison.OrdinalIgnoreCase))
+            {
+                return outputPath;
+            }
+
+            var basePath = outputPath;
+            if (normalizedExpected.Equals(".tar.gz", StringComparison.OrdinalIgnoreCase))
+            {
+                basePath = RemoveSuffix(basePath, ".tar.gz") ?? RemoveSuffix(basePath, ".tar.lzma") ?? RemoveSuffix(basePath, ".gz") ?? RemoveSuffix(basePath, ".lzma") ?? basePath;
+                return basePath + ".tar.gz";
+            }
+
+            if (normalizedExpected.Equals(".tar.lzma", StringComparison.OrdinalIgnoreCase))
+            {
+                basePath = RemoveSuffix(basePath, ".tar.lzma") ?? RemoveSuffix(basePath, ".tar.gz") ?? RemoveSuffix(basePath, ".lzma") ?? RemoveSuffix(basePath, ".gz") ?? basePath;
+                return basePath + ".tar.lzma";
+            }
+
+            basePath = Path.ChangeExtension(outputPath, normalizedExpected.TrimStart('.'));
+            return basePath.EndsWith(normalizedExpected, StringComparison.OrdinalIgnoreCase)
+                ? basePath
+                : basePath + normalizedExpected;
+        }
+
+        private static string? RemoveSuffix(string value, string suffix)
+        {
+            if (value.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+            {
+                return value[..^suffix.Length];
+            }
+
+            return null;
+        }
+
         public async Task ExtractThreadsAsync(string outputPath, string searchQuery, string label, string compression = "lzma", int? maxMessageSizeMB = null)
         {
             // Connect to the IMAP server and authenticate
@@ -135,10 +178,7 @@ namespace GMailThreadExtractor
                     _ => ".tar.lzma" // Default to LZMA
                 };
 
-                if (!outputPath.EndsWith(expectedExtension, StringComparison.OrdinalIgnoreCase))
-                {
-                    outputPath = outputPath + expectedExtension;
-                }
+                outputPath = EnsureExpectedExtension(outputPath, expectedExtension);
 
                 // Use streaming compression to minimize memory usage
                 var maxSizeMB = maxMessageSizeMB ?? 10; // Default 10MB limit
