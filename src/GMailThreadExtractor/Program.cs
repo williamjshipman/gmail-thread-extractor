@@ -67,7 +67,9 @@ namespace GMailThreadExtractor
             compressionOption.AddValidator(result =>
             {
                 var value = result.GetValueOrDefault<string>();
-                if (!string.IsNullOrEmpty(value) && value != "lzma" && value != "gzip")
+                if (!string.IsNullOrEmpty(value) &&
+                    !string.Equals(value, "lzma", StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(value, "gzip", StringComparison.OrdinalIgnoreCase))
                 {
                     result.ErrorMessage = "Compression method must be either 'lzma' or 'gzip'.";
                 }
@@ -204,10 +206,20 @@ namespace GMailThreadExtractor
         /// <returns>The email address supplied by the user.</returns>
         private static string PromptForEmail()
         {
+            if (Console.IsInputRedirected)
+            {
+                throw new InvalidOperationException("Email must be supplied via --email or configuration when input is redirected.");
+            }
+
             while (true)
             {
                 Console.Write("Email: ");
                 var input = Console.ReadLine();
+                if (input is null)
+                {
+                    throw new InvalidOperationException("Input ended before an email address was provided.");
+                }
+
                 if (!string.IsNullOrWhiteSpace(input))
                 {
                     return input;
@@ -221,11 +233,21 @@ namespace GMailThreadExtractor
         /// <returns>The password supplied by the user.</returns>
         private static string PromptForPassword()
         {
+            if (Console.IsInputRedirected)
+            {
+                throw new InvalidOperationException("Password must be supplied via --password or configuration when input is redirected.");
+            }
+
             while (true)
             {
                 Console.Write("Password: ");
                 var password = ReadHiddenInput();
                 Console.WriteLine(); // Move to the next line after password entry.
+                if (password is null)
+                {
+                    throw new InvalidOperationException("Input ended before a password was provided.");
+                }
+
                 if (!string.IsNullOrEmpty(password))
                 {
                     return password;
@@ -239,11 +261,6 @@ namespace GMailThreadExtractor
         /// <returns>The string entered by the user.</returns>
         private static string ReadHiddenInput()
         {
-            if (Console.IsInputRedirected)
-            {
-                return Console.ReadLine() ?? string.Empty;
-            }
-
             var builder = new StringBuilder();
 
             while (true)
@@ -256,7 +273,7 @@ namespace GMailThreadExtractor
                 catch (InvalidOperationException)
                 {
                     // Input is redirected or not available, fallback to line-based read.
-                    return Console.ReadLine() ?? string.Empty;
+                    return Console.ReadLine();
                 }
 
                 if (keyInfo.Key == ConsoleKey.Enter)
