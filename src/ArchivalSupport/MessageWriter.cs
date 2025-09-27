@@ -85,6 +85,12 @@ namespace ArchivalSupport
             List<MimeMessage> messages,
             List<IMessageSummary> msgSummaries)
         {
+            if (messages.Count != msgSummaries.Count)
+            {
+                throw new InvalidOperationException(
+                    $"Message count ({messages.Count}) does not match summary count ({msgSummaries.Count})");
+            }
+
             var messageBlobs = new List<MessageBlob>();
             foreach (var (message, msgSummary) in messages.Zip(msgSummaries, (m, s) => (m, s)))
             {
