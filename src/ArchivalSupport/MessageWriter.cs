@@ -54,22 +54,8 @@ namespace ArchivalSupport
                     message.Date.UtcDateTime);
             }
 
-            using var probe = new MemoryStream();
-            message.WriteTo(probe);
-
-            if (probe.Length <= maxSizeBytes)
-            {
-                return new MessageBlob(
-                    msgSummary?.UniqueId.ToString() ?? "unknown",
-                    probe.ToArray(),
-                    message.Subject ?? string.Empty,
-                    message.From?.ToString() ?? string.Empty,
-                    message.To?.ToString() ?? string.Empty,
-                    message.Date.UtcDateTime);
-            }
-
-            LoggingConfiguration.Logger.Debug("Message {MessageId} ({MessageSize:N0} bytes) will use streaming", msgSummary?.UniqueId.ToString() ?? "unknown", probe.Length);
-
+            // Size unknown or unreliable - default to streaming to avoid size probing
+            LoggingConfiguration.Logger.Debug("Message {MessageId} has unknown size, defaulting to streaming", msgSummary?.UniqueId.ToString() ?? "unknown");
             return new MessageBlob(
                 msgSummary?.UniqueId.ToString() ?? "unknown",
                 async stream =>
@@ -77,7 +63,7 @@ namespace ArchivalSupport
                     message.WriteTo(stream);
                     await stream.FlushAsync();
                 },
-                probe.Length,
+                -1, // Size unknown
                 message.Subject ?? string.Empty,
                 message.From?.ToString() ?? string.Empty,
                 message.To?.ToString() ?? string.Empty,
