@@ -119,10 +119,10 @@ namespace GMailThreadExtractor
 
         private void ValidateEmail()
         {
-            if (string.IsNullOrWhiteSpace(Email))
+            if (Email == null)
                 return; // Will be prompted for later
 
-            if (!Email.Contains('@') || Email.Length < 3)
+            if (string.IsNullOrWhiteSpace(Email) || !Email.Contains('@') || Email.Length < 3)
                 throw new ArgumentException("Email must be a valid email address format.");
         }
 
