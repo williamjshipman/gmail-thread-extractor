@@ -7,6 +7,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>GMailThreadExtractor.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="LZMA-SDK" Version="22.1.1" />
     <PackageReference Include="MailKit" Version="4.12.0" />
     <PackageReference Include="SharpZipLib" Version="1.4.2" />
