@@ -68,12 +68,12 @@ public class LZMACompressor : ICompressor
     /// <returns>A task representing the asynchronous compression operation.</returns>
     public async Task Compress(string outputPath, Dictionary<ulong, List<MessageBlob>> threads)
     {
-        string tempTarFilePath = Path.Combine(Path.GetTempPath(), $"lzma_temp_{Guid.NewGuid():N}.tar");
+        var (tempFileStream, tempTarFilePath) = SecureIOUtilities.CreateSecureTempFile("lzma_temp", ".tar");
 
         try
         {
             // Step 1: Create tar file with streaming I/O (low memory usage)
-            using (var tempFileStream = new FileStream(tempTarFilePath, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 8192))
+            using (tempFileStream)
             {
                 using (var tarStream = new TarOutputStream(tempFileStream, Encoding.UTF8))
                 {
@@ -125,15 +125,7 @@ public class LZMACompressor : ICompressor
         finally
         {
             // Always clean up temporary file
-            try
-            {
-                if (File.Exists(tempTarFilePath))
-                    File.Delete(tempTarFilePath);
-            }
-            catch (Exception ex)
-            {
-                LoggingConfiguration.Logger.Warning("Unable to delete temporary file {TempFilePath}: {ErrorMessage}", tempTarFilePath, ex.Message);
-            }
+            SecureIOUtilities.SafeDeleteFile(tempTarFilePath);
         }
     }
 
@@ -149,14 +141,14 @@ public class LZMACompressor : ICompressor
     /// <returns>A task representing the asynchronous compression operation.</returns>
     public async Task CompressStreaming(string outputPath, Dictionary<ulong, List<IMessageSummary>> threads, MessageFetcher messageFetcher, int maxMessageSizeMB = 10)
     {
-        string tempTarFilePath = Path.Combine(Path.GetTempPath(), $"lzma_streaming_temp_{Guid.NewGuid():N}.tar");
+        var (tempFileStream, tempTarFilePath) = SecureIOUtilities.CreateSecureTempFile("lzma_streaming_temp", ".tar");
 
         try
         {
             LoggingConfiguration.Logger.Information("LZMA streaming compression: Creating tar archive...");
 
             // Pass 1: Create tar file using streaming (one message at a time)
-            using (var tempFileStream = new FileStream(tempTarFilePath, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 8192))
+            using (tempFileStream)
             {
                 using (var tarStream = new TarOutputStream(tempFileStream, Encoding.UTF8))
                 {
@@ -211,15 +203,7 @@ public class LZMACompressor : ICompressor
         finally
         {
             // Always clean up temporary file
-            try
-            {
-                if (File.Exists(tempTarFilePath))
-                    File.Delete(tempTarFilePath);
-            }
-            catch (Exception ex)
-            {
-                LoggingConfiguration.Logger.Warning("Unable to delete temporary file {TempFilePath}: {ErrorMessage}", tempTarFilePath, ex.Message);
-            }
+            SecureIOUtilities.SafeDeleteFile(tempTarFilePath);
         }
     }
 }
