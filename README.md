@@ -1,5 +1,8 @@
 # gmail-thread-extractor
 
+![CI](https://github.com/williamjshipman/gmail-thread-extractor/actions/workflows/ci.yml/badge.svg?branch=main)
+![Coverage](https://raw.githubusercontent.com/williamjshipman/gmail-thread-extractor/gh-pages/coverage/badge_linecoverage.svg)
+
 A tool for extracting and saving an entire thread of messages from GMail
 
 ## Description
@@ -90,6 +93,10 @@ dotnet test --verbosity normal
 
 All tests are hermetic (no live network connections or filesystem writes outside temp locations).
 
+## Continuous Integration
+
+Automated builds run on GitHub Actions for every push and pull request targeting `main`. The pipeline restores dependencies, builds the solution in Release mode, runs the full test suite with code coverage collection, and publishes detailed coverage reports and SVG badges to the `gh-pages` branch.
+
 ## Configuration File
 
 You can use a JSON configuration file to provide default values for command-line arguments. Command-line arguments will override config file values.
@@ -150,7 +157,7 @@ The following features and modifications are planned for the future:
 - [ ] Add support for tar.xz format
 - [ ] Get proper .7z support working (currently using 7zip SDK for tar.lzma)
 - [ ] Add support for OAuth2 authentication (low priority due to configuration complexity)
-- [ ] CI/CD pipeline using GitHub Actions
+- [x] CI/CD pipeline using GitHub Actions
 
 ## License
 
