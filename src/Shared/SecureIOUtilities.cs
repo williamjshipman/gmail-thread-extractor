@@ -164,6 +164,9 @@ namespace Shared
         /// <summary>
         /// Sets Unix file permissions to 600 (rw-------).
         /// </summary>
+        [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+        [System.Runtime.Versioning.SupportedOSPlatform("macos")]
+        [System.Runtime.Versioning.SupportedOSPlatform("freebsd")]
         private static void SetUnixPermissions(string filePath)
         {
             Debug.Assert(RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ||
