@@ -133,6 +133,7 @@ namespace Shared
         /// <summary>
         /// Sets Windows ACL permissions to restrict access to the current user only.
         /// </summary>
+        [System.Runtime.Versioning.SupportedOSPlatform("windows")]
         private static void SetWindowsAclPermissions(string filePath)
         {
             Debug.Assert(RuntimeInformation.IsOSPlatform(OSPlatform.Windows), "Unsupported platform");
