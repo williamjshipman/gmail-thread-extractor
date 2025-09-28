@@ -213,6 +213,9 @@ namespace Shared
                 // Compression errors
                 InvalidDataException => ErrorCategory.Compression,
 
+                // Aggregate exceptions - categorize by first inner exception
+                AggregateException agg when agg.InnerExceptions.Count > 0 => CategorizeException(agg.InnerExceptions[0]),
+
                 // System errors
                 OutOfMemoryException => ErrorCategory.System,
                 StackOverflowException => ErrorCategory.System,
