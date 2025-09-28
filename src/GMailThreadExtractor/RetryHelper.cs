@@ -48,7 +48,7 @@ namespace GMailThreadExtractor
                         // Calculate exponential backoff delay: baseDelay * 2^(attempt-1)
                         var delay = TimeSpan.FromMilliseconds(
                             Math.Min(
-                                baseDelay.Value.TotalMilliseconds * Math.Pow(2, attempt - 1),
+                                baseDelay.Value.TotalMilliseconds * (1 << (attempt - 1)),
                                 maxDelay.Value.TotalMilliseconds));
 
                         LoggingConfiguration.Logger.Warning("{OperationName} failed (attempt {Attempt}/{MaxAttempts}): {ErrorMessage}", operationName, attempt, maxAttempts, ex.Message);
