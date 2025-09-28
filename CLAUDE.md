@@ -17,13 +17,15 @@ dotnet build
 ### Running the application
 
 ```bash
-dotnet run --project .\src\GMailThreadExtractor\ --email <email> --password <app_password> --search "<search_terms>" --output <output_file> --compression <lzma|gzip> --timeout <minutes>
+dotnet run --project .\src\GMailThreadExtractor\ --email <email> --password <app_password> --search "<search_terms>" --output <output_file> --compression <lzma|gzip> --timeout <minutes> --max-message-size <MB>
 ```
 
-The `--email` and `--password` parameters are optional (user will be prompted if not provided).
-The `--search` and `--output` parameters are required.
-The `--compression` parameter is optional (defaults to "lzma").
-The `--timeout` parameter is optional (defaults to 5 minutes, range: 1-60 minutes).
+**Parameters:**
+- `--email` and `--password` - Optional (user will be prompted if not provided)
+- `--search` and `--output` - Required
+- `--compression` - Optional (defaults to "lzma", case-insensitive: accepts "lzma", "LZMA", "gzip", "GZIP", etc.)
+- `--timeout` - Optional (defaults to 5 minutes, range: 1-60 minutes)
+- `--max-message-size` - Optional (defaults to 10 MB, range: 1-1000 MB)
 
 ### Configuration File Support
 
@@ -50,13 +52,22 @@ Example config file format:
   "label": "Important",
   "output": "extracted-emails",
   "compression": "lzma",
-  "timeoutMinutes": 5
+  "timeoutMinutes": 5,
+  "maxMessageSizeMB": 10
 }
 ```
 
-The `compression` field accepts either "lzma" (default) or "gzip". The appropriate file extension (.tar.lzma or .tar.gz) will be automatically appended to the output filename if not already present.
+**Configuration Fields:**
+- `compression` - Case-insensitive, accepts "lzma", "LZMA", "gzip", "GZIP", etc. (defaults to "lzma")
+- `timeoutMinutes` - IMAP operation timeout (1-60 minutes, defaults to 5) to prevent hanging on slow networks
+- `maxMessageSizeMB` - Streaming threshold for large messages (1-1000 MB, defaults to 10) to optimize memory usage
+- `email` - Gmail address (validated for proper email format)
+- `password` - Gmail app password (not regular password)
+- `search` - Gmail search query (max 1000 characters)
+- `label` - Gmail label to filter by
+- `output` - Output file path (validated for directory existence and filename safety)
 
-The `timeoutMinutes` field sets the IMAP operation timeout (1-60 minutes, defaults to 5). This prevents hanging on slow networks or large operations.
+The appropriate file extension (.tar.lzma or .tar.gz) will be automatically appended to the output filename if not already present. Configuration supports JSON comments and trailing commas for convenience.
 
 ### Solution structure
 
@@ -67,13 +78,14 @@ The `timeoutMinutes` field sets the IMAP operation timeout (1-60 minutes, defaul
 
 ### Project Structure
 
-The solution contains two main projects:
+The solution contains three main projects:
 
 1. **GMailThreadExtractor** (`src/GMailThreadExtractor/`) - Main executable project
 
    - `Program.cs` - Entry point with command-line argument parsing using System.CommandLine
    - `GMailThreadExtractor.cs` - Core IMAP logic for connecting to Gmail and extracting threads
-   - `ArgumentParser.cs` - Currently empty, command-line parsing is handled in Program.cs
+   - `Config.cs` - Configuration file loading and validation with JSON support
+   - `RetryHelper.cs` - Retry logic with exponential backoff for handling transient failures
 
 2. **ArchivalSupport** (`src/ArchivalSupport/`) - Library for compression and archival
    - `ICompressor.cs` - Interface defining the compression contract for all compressor implementations
@@ -81,6 +93,12 @@ The solution contains two main projects:
    - `LZMACompressor.cs` - LZMA compression implementation using SevenZip LZMA encoder (implements ICompressor)
    - `TarGzipCompressor.cs` - Gzip compression implementation using SharpZipLib (implements ICompressor)
    - `MessageWriter.cs` - Converts MailKit messages to MessageBlob objects for serialization
+   - `SafeNameBuilder.cs` - Utilities for creating safe file and directory names for tar archives
+
+3. **Shared** (`src/Shared/`) - Common utilities and infrastructure
+   - `LoggingConfiguration.cs` - Centralized Serilog logging configuration
+   - `ErrorHandling.cs` - Structured error handling with categorization and strategies
+   - `SecureIOUtilities.cs` - Platform-specific secure file operations with ACLs/permissions
 
 ### Key Dependencies
 
@@ -88,7 +106,8 @@ The solution contains two main projects:
 - **MimeKit** - Email message parsing and handling
 - **System.CommandLine** (beta) - Command-line argument parsing
 - **LZMA-SDK** - 7zip LZMA compression
-- **SharpZipLib** - Tar archive creation
+- **SharpZipLib** - Tar archive creation and Gzip compression
+- **Serilog** - Structured logging with console and file output support
 
 ### Data Flow
 
@@ -100,17 +119,77 @@ The solution contains two main projects:
 6. Selected compressor (LZMA or Gzip) creates tar archive and applies compression
 7. Output saved as `.tar.lzma` or `.tar.gz` file (based on compression setting)
 
+### Security Features
+
+- **Secure temporary files**: Platform-specific secure permissions (Windows ACLs restrict to current user, Unix 600 permissions)
+- **Input validation**: Configuration fields are validated for safety (email format, file paths, size limits)
+- **Safe file naming**: Automatic sanitization of email subjects and sender names for filesystem compatibility
+- **Error handling**: Comprehensive structured error handling with categorization and logging
+
+### Reliability Features
+
+- **Retry logic**: Exponential backoff for transient network failures (SocketException, TimeoutException, etc.)
+- **Error categorization**: Distinguishes between retryable (network, temporary) and non-retryable (authentication, configuration) errors
+- **Graceful degradation**: Continues processing when individual messages fail
+- **Memory management**: Automatic streaming for large messages to prevent memory exhaustion
+- **Progress logging**: Detailed Serilog-based logging for monitoring and debugging
+
 ### Important Notes
 
 - Uses Gmail app passwords (not regular password) for authentication
 - Searches the "All Mail" folder to ensure complete thread retrieval
 - Each thread is stored in a separate folder within the tar archive
-- File naming convention: `{sender}_{date}.eml` for individual messages
-- LZMA compression uses 256MB dictionary size and BT4 match finder for optimal compression
+- File naming convention: `{uniqueId}_{subject}_{timestamp}_{sender}.eml` for individual messages
+- LZMA compression uses 64MB dictionary size and BT4 match finder for optimal compression
 - Gzip compression uses level 9 (best compression) for tar.gz output format
-- Compression method can be selected via `--compression` option or config file (defaults to "lzma")
+- Compression method selection is case-insensitive via `--compression` option or config file
 - File extensions are automatically appended based on compression method
+- Thread directory names are limited to 100 characters for TAR compatibility
 
 ## Testing
 
-Currently no unit tests exist (planned for future implementation).
+The solution includes comprehensive unit and integration tests:
+
+### Test Projects
+
+- **ArchivalSupport.Tests** (`test/ArchivalSupport.Tests/`) - Tests for archival and compression components
+  - `CompressionTests.cs` - LZMA and Gzip compression algorithm tests
+  - `MessageWriterTests.cs` - Email message serialization and blob creation tests
+
+- **GMailThreadExtractor.Tests** (`test/GMailThreadExtractor.Tests/`) - Tests for main application components
+  - `ConfigTests.cs` - Configuration loading, validation, and merging tests
+  - `RetryHelperTests.cs` - Retry logic with exponential backoff tests
+  - `ErrorHandlingTests.cs` - Structured error handling and categorization tests
+  - `IntegrationTests.cs` - End-to-end workflow and compression integration tests
+  - `SecureIOUtilitiesTests.cs` - Cross-platform secure file operations tests
+
+### Test Coverage
+
+- **120 total tests** with 100% pass rate
+- Configuration validation (email format, compression options, file paths)
+- Error handling strategies (LogAndContinue, LogAndThrow, LogAndTerminate)
+- Retry logic for various exception types (network, timeout, authentication)
+- Compression algorithms (LZMA, Gzip) with realistic email data
+- Secure file operations (Windows ACLs, Unix permissions)
+- Memory management (streaming vs in-memory message processing)
+- Safe filename generation and filesystem compatibility
+
+### Running Tests
+
+```bash
+# Run all tests
+dotnet test
+
+# Run specific test project
+dotnet test test/GMailThreadExtractor.Tests/
+
+# Run with verbose output
+dotnet test --verbosity normal
+```
+
+### Test Categories
+
+- **Unit Tests**: Individual component functionality
+- **Integration Tests**: End-to-end workflows with mock data
+- **Cross-platform Tests**: Windows and Unix-specific behaviors
+- **Error Handling Tests**: Exception scenarios and recovery strategies

@@ -2,6 +2,8 @@ using System;
 using System.CommandLine;
 using System.CommandLine.Invocation;
 using System.Text;
+using Shared;
+using Serilog;
 
 namespace GMailThreadExtractor
 {
@@ -17,6 +19,9 @@ namespace GMailThreadExtractor
         /// <returns>The process exit code produced by System.CommandLine.</returns>
         static async Task<int> Main(string[] args)
         {
+            // Initialize logging early
+            LoggingConfiguration.Initialize();
+
             var configOption = new Option<string>(
                 name: "--config",
                 description: "Path to the JSON configuration file.")
@@ -62,7 +67,9 @@ namespace GMailThreadExtractor
             compressionOption.AddValidator(result =>
             {
                 var value = result.GetValueOrDefault<string>();
-                if (!string.IsNullOrEmpty(value) && value != "lzma" && value != "gzip")
+                if (!string.IsNullOrEmpty(value) &&
+                    !string.Equals(value, "lzma", StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(value, "gzip", StringComparison.OrdinalIgnoreCase))
                 {
                     result.ErrorMessage = "Compression method must be either 'lzma' or 'gzip'.";
                 }
@@ -183,7 +190,14 @@ namespace GMailThreadExtractor
                 await extractor.ExtractThreadsAsync(finalConfig.Output, finalConfig.Search, finalConfig.Label ?? string.Empty, finalConfig.Compression ?? "lzma", finalConfig.MaxMessageSizeMB);
             });
 
-            return await rootCommand.InvokeAsync(args);
+            try
+            {
+                return await rootCommand.InvokeAsync(args);
+            }
+            finally
+            {
+                LoggingConfiguration.CloseAndFlush();
+            }
         }
 
         /// <summary>
@@ -192,10 +206,20 @@ namespace GMailThreadExtractor
         /// <returns>The email address supplied by the user.</returns>
         private static string PromptForEmail()
         {
+            if (Console.IsInputRedirected)
+            {
+                throw new InvalidOperationException("Email must be supplied via --email or configuration when input is redirected.");
+            }
+
             while (true)
             {
                 Console.Write("Email: ");
                 var input = Console.ReadLine();
+                if (input is null)
+                {
+                    throw new InvalidOperationException("Input ended before an email address was provided.");
+                }
+
                 if (!string.IsNullOrWhiteSpace(input))
                 {
                     return input;
@@ -209,11 +233,21 @@ namespace GMailThreadExtractor
         /// <returns>The password supplied by the user.</returns>
         private static string PromptForPassword()
         {
+            if (Console.IsInputRedirected)
+            {
+                throw new InvalidOperationException("Password must be supplied via --password or configuration when input is redirected.");
+            }
+
             while (true)
             {
                 Console.Write("Password: ");
                 var password = ReadHiddenInput();
                 Console.WriteLine(); // Move to the next line after password entry.
+                if (password is null)
+                {
+                    throw new InvalidOperationException("Input ended before a password was provided.");
+                }
+
                 if (!string.IsNullOrEmpty(password))
                 {
                     return password;
@@ -231,7 +265,16 @@ namespace GMailThreadExtractor
 
             while (true)
             {
-                var keyInfo = Console.ReadKey(intercept: true); // Intercept prevents the character from being displayed.
+                ConsoleKeyInfo keyInfo;
+                try
+                {
+                    keyInfo = Console.ReadKey(intercept: true); // Intercept prevents the character from being displayed.
+                }
+                catch (InvalidOperationException)
+                {
+                    // Input is redirected or not available, fallback to line-based read.
+                    return Console.ReadLine();
+                }
 
                 if (keyInfo.Key == ConsoleKey.Enter)
                 {

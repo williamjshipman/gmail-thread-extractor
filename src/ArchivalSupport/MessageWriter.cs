@@ -1,5 +1,7 @@
 using MailKit;
 using MimeKit;
+using Shared;
+using Serilog;
 
 namespace ArchivalSupport
 {
@@ -37,7 +39,7 @@ namespace ArchivalSupport
 
             if (reportedSize > maxSizeBytes)
             {
-                Console.WriteLine($"Message {msgSummary?.UniqueId.ToString() ?? "unknown"} ({reportedSize:N0} bytes) will use streaming");
+                LoggingConfiguration.Logger.Debug("Message {MessageId} ({MessageSize:N0} bytes) will use streaming", msgSummary?.UniqueId.ToString() ?? "unknown", reportedSize);
                 return new MessageBlob(
                     msgSummary?.UniqueId.ToString() ?? "unknown",
                     async stream =>
@@ -52,22 +54,8 @@ namespace ArchivalSupport
                     message.Date.UtcDateTime);
             }
 
-            using var probe = new MemoryStream();
-            message.WriteTo(probe);
-
-            if (probe.Length <= maxSizeBytes)
-            {
-                return new MessageBlob(
-                    msgSummary?.UniqueId.ToString() ?? "unknown",
-                    probe.ToArray(),
-                    message.Subject ?? string.Empty,
-                    message.From?.ToString() ?? string.Empty,
-                    message.To?.ToString() ?? string.Empty,
-                    message.Date.UtcDateTime);
-            }
-
-            Console.WriteLine($"Message {msgSummary?.UniqueId.ToString() ?? "unknown"} ({probe.Length:N0} bytes) will use streaming");
-
+            // Size unknown or unreliable - default to streaming to avoid size probing
+            LoggingConfiguration.Logger.Debug("Message {MessageId} has unknown size, defaulting to streaming", msgSummary?.UniqueId.ToString() ?? "unknown");
             return new MessageBlob(
                 msgSummary?.UniqueId.ToString() ?? "unknown",
                 async stream =>
@@ -75,7 +63,7 @@ namespace ArchivalSupport
                     message.WriteTo(stream);
                     await stream.FlushAsync();
                 },
-                probe.Length,
+                -1, // Size unknown
                 message.Subject ?? string.Empty,
                 message.From?.ToString() ?? string.Empty,
                 message.To?.ToString() ?? string.Empty,
@@ -97,6 +85,12 @@ namespace ArchivalSupport
             List<MimeMessage> messages,
             List<IMessageSummary> msgSummaries)
         {
+            if (messages.Count != msgSummaries.Count)
+            {
+                throw new InvalidOperationException(
+                    $"Message count ({messages.Count}) does not match summary count ({msgSummaries.Count})");
+            }
+
             var messageBlobs = new List<MessageBlob>();
             foreach (var (message, msgSummary) in messages.Zip(msgSummaries, (m, s) => (m, s)))
             {
@@ -125,7 +119,7 @@ namespace ArchivalSupport
         public string DateString =>
             Date.ToUniversalTime().ToString("yyyy-MM-dd_HH-mm-ss");
 
-        public string FileName => SafeNameBuilder.BuildMessageFileName(UniqueId, Subject, DateString);
+        public string FileName => SafeNameBuilder.BuildMessageFileName(UniqueId, Subject, DateString, From);
 
         /// <summary>
         /// Construct a new MessageBlob object with in-memory data.

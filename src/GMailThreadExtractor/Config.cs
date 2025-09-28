@@ -1,4 +1,6 @@
 using System.Text.Json;
+using Shared;
+using Serilog;
 
 namespace GMailThreadExtractor
 {
@@ -58,45 +60,47 @@ namespace GMailThreadExtractor
         {
             if (!File.Exists(configPath))
             {
-                Console.WriteLine($"Config file not found: {configPath}");
+                LoggingConfiguration.Logger.Warning("Config file not found: {ConfigPath}", configPath);
                 return new Config();
             }
 
+            var jsonContent = await File.ReadAllTextAsync(configPath);
+            Config? config;
             try
             {
-                var jsonContent = await File.ReadAllTextAsync(configPath);
-                var config = JsonSerializer.Deserialize<Config>(jsonContent, new JsonSerializerOptions
+                config = JsonSerializer.Deserialize<Config>(jsonContent, new JsonSerializerOptions
                 {
                     PropertyNameCaseInsensitive = true,
                     AllowTrailingCommas = true,
                     ReadCommentHandling = JsonCommentHandling.Skip
                 });
-
-                Console.WriteLine($"Config loaded from: {configPath}");
-                var finalConfig = config ?? new Config();
-
-                // Validate the loaded configuration
-                try
-                {
-                    finalConfig.Validate();
-                }
-                catch (ArgumentException ex)
-                {
-                    throw new ArgumentException($"Invalid configuration in file '{configPath}': {ex.Message}", ex);
-                }
-
-                return finalConfig;
             }
-            catch (ArgumentException)
+            catch (JsonException ex)
             {
-                // Re-throw validation errors with context already added
-                throw;
+                LoggingConfiguration.Logger.Error(
+                    "Failed to parse configuration file '{ConfigPath}': {ErrorMessage}",
+                    configPath,
+                    ex.Message);
+                throw new ArgumentException($"Invalid configuration file '{configPath}': {ex.Message}", ex);
             }
-            catch (Exception ex)
+
+            LoggingConfiguration.Logger.Information("Config loaded from: {ConfigPath}", configPath);
+            var finalConfig = config ?? new Config();
+
+            try
             {
-                Console.WriteLine($"Error reading config file {configPath}: {ex.Message}");
-                return new Config();
+                finalConfig.Validate();
             }
+            catch (ArgumentException ex)
+            {
+                LoggingConfiguration.Logger.Error(
+                    "Invalid configuration in file '{ConfigPath}': {ErrorMessage}",
+                    configPath,
+                    ex.Message);
+                throw new ArgumentException($"Invalid configuration in file '{configPath}': {ex.Message}", ex);
+            }
+
+            return finalConfig;
         }
 
         /// <summary>
@@ -115,10 +119,10 @@ namespace GMailThreadExtractor
 
         private void ValidateEmail()
         {
-            if (string.IsNullOrWhiteSpace(Email))
+            if (Email == null)
                 return; // Will be prompted for later
 
-            if (!Email.Contains('@') || Email.Length < 3)
+            if (string.IsNullOrWhiteSpace(Email) || !Email.Contains('@') || Email.Length < 3)
                 throw new ArgumentException("Email must be a valid email address format.");
         }
 

@@ -1,13 +1,8 @@
-
-using System.IO.Compression;
 using MailKit;
 using MailKit.Net.Imap;
 using MailKit.Search;
-using MimeKit;
-using ICSharpCode.SharpZipLib.Tar;
-using SevenZip;
-using System.Text;
 using ArchivalSupport;
+using Shared;
 
 namespace GMailThreadExtractor
 {
@@ -33,6 +28,49 @@ namespace GMailThreadExtractor
             _timeout = timeout ?? TimeSpan.FromMinutes(5); // Default 5 minute timeout
         }
 
+        private static string EnsureExpectedExtension(string outputPath, string expectedExtension)
+        {
+            if (string.IsNullOrWhiteSpace(outputPath))
+            {
+                return expectedExtension.TrimStart('.');
+            }
+
+            var normalizedExpected = expectedExtension.StartsWith('.') ? expectedExtension : "." + expectedExtension;
+
+            if (outputPath.EndsWith(normalizedExpected, StringComparison.OrdinalIgnoreCase))
+            {
+                return outputPath;
+            }
+
+            var basePath = outputPath;
+            if (normalizedExpected.Equals(".tar.gz", StringComparison.OrdinalIgnoreCase))
+            {
+                basePath = RemoveSuffix(basePath, ".tar.gz") ?? RemoveSuffix(basePath, ".tar.lzma") ?? RemoveSuffix(basePath, ".gz") ?? RemoveSuffix(basePath, ".lzma") ?? basePath;
+                return basePath + ".tar.gz";
+            }
+
+            if (normalizedExpected.Equals(".tar.lzma", StringComparison.OrdinalIgnoreCase))
+            {
+                basePath = RemoveSuffix(basePath, ".tar.lzma") ?? RemoveSuffix(basePath, ".tar.gz") ?? RemoveSuffix(basePath, ".lzma") ?? RemoveSuffix(basePath, ".gz") ?? basePath;
+                return basePath + ".tar.lzma";
+            }
+
+            basePath = Path.ChangeExtension(outputPath, normalizedExpected.TrimStart('.'));
+            return basePath.EndsWith(normalizedExpected, StringComparison.OrdinalIgnoreCase)
+                ? basePath
+                : basePath + normalizedExpected;
+        }
+
+        private static string? RemoveSuffix(string value, string suffix)
+        {
+            if (value.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+            {
+                return value[..^suffix.Length];
+            }
+
+            return null;
+        }
+
         public async Task ExtractThreadsAsync(string outputPath, string searchQuery, string label, string compression = "lzma", int? maxMessageSizeMB = null)
         {
             // Connect to the IMAP server and authenticate
@@ -40,13 +78,30 @@ namespace GMailThreadExtractor
             {
                 // Configure timeout for all IMAP operations
                 client.Timeout = (int)_timeout.TotalMilliseconds;
-                Console.WriteLine("IMAP Timeout set to: " + client.Timeout + " ms");
+                LoggingConfiguration.Logger.Information("IMAP Timeout set to: {TimeoutMs} ms", client.Timeout);
 
-                await client.ConnectAsync(_imapServer, _imapPort,
-                    MailKit.Security.SecureSocketOptions.SslOnConnect);
-                await client.AuthenticateAsync(_email, _password);
+                // Connect with retry logic
+                await RetryHelper.ExecuteWithRetryAsync(
+                    async () => await client.ConnectAsync(_imapServer, _imapPort, MailKit.Security.SecureSocketOptions.SslOnConnect),
+                    maxAttempts: 3,
+                    baseDelay: TimeSpan.FromSeconds(2),
+                    operationName: "IMAP connection");
+
+                // Authenticate with retry logic
+                await RetryHelper.ExecuteWithRetryAsync(
+                    async () => await client.AuthenticateAsync(_email, _password),
+                    maxAttempts: 2, // Fewer attempts for auth to avoid account lockout
+                    baseDelay: TimeSpan.FromSeconds(1),
+                    operationName: "IMAP authentication");
+
                 var allMail = client.GetFolder(SpecialFolder.All);
-                await allMail.OpenAsync(FolderAccess.ReadOnly);
+
+                // Open folder with retry logic
+                await RetryHelper.ExecuteWithRetryAsync(
+                    async () => await allMail.OpenAsync(FolderAccess.ReadOnly),
+                    maxAttempts: 3,
+                    baseDelay: TimeSpan.FromSeconds(1),
+                    operationName: "opening All Mail folder");
 
                 // Search for emails based on the provided criteria
                 var queries = new List<SearchQuery>();
@@ -63,14 +118,24 @@ namespace GMailThreadExtractor
                 {
                     query = queries.Aggregate(query, (current, q) => current.And(q));
                 }
-                var uids = await allMail.SearchAsync(query);
+                // Search for emails with retry logic
+                var uids = await RetryHelper.ExecuteWithRetryAsync(
+                    async () => await allMail.SearchAsync(query),
+                    maxAttempts: 3,
+                    baseDelay: TimeSpan.FromSeconds(1),
+                    operationName: "searching for emails");
 
-                var messages = await allMail.FetchAsync(uids,
-                    MessageSummaryItems.BodyStructure |
-                    MessageSummaryItems.Envelope |
-                    MessageSummaryItems.UniqueId |
-                    MessageSummaryItems.GMailThreadId |
-                    MessageSummaryItems.Size);
+                // Fetch message summaries with retry logic
+                var messages = await RetryHelper.ExecuteWithRetryAsync(
+                    async () => await allMail.FetchAsync(uids,
+                        MessageSummaryItems.BodyStructure |
+                        MessageSummaryItems.Envelope |
+                        MessageSummaryItems.UniqueId |
+                        MessageSummaryItems.GMailThreadId |
+                        MessageSummaryItems.Size),
+                    maxAttempts: 3,
+                    baseDelay: TimeSpan.FromSeconds(2),
+                    operationName: "fetching message summaries");
 
                 var threads = new Dictionary<ulong, List<IMessageSummary>>();
                 foreach (var message in messages)
@@ -82,18 +147,29 @@ namespace GMailThreadExtractor
                         {
                             continue; // Skip if we already have this thread.
                         }
-                        var threadUuids = await allMail.SearchAsync(SearchQuery.All.And(SearchQuery.GMailThreadId(threadId)));
-                        var threadList = await allMail.FetchAsync(threadUuids,
-                            MessageSummaryItems.BodyStructure |
-                            MessageSummaryItems.Envelope |
-                            MessageSummaryItems.UniqueId |
-                            MessageSummaryItems.GMailThreadId |
-                            MessageSummaryItems.Size);
+                        // Search for thread messages with retry logic
+                        var threadUuids = await RetryHelper.ExecuteWithRetryAsync(
+                            async () => await allMail.SearchAsync(SearchQuery.All.And(SearchQuery.GMailThreadId(threadId))),
+                            maxAttempts: 3,
+                            baseDelay: TimeSpan.FromSeconds(1),
+                            operationName: $"searching thread {threadId}");
+
+                        // Fetch thread messages with retry logic
+                        var threadList = await RetryHelper.ExecuteWithRetryAsync(
+                            async () => await allMail.FetchAsync(threadUuids,
+                                MessageSummaryItems.BodyStructure |
+                                MessageSummaryItems.Envelope |
+                                MessageSummaryItems.UniqueId |
+                                MessageSummaryItems.GMailThreadId |
+                                MessageSummaryItems.Size),
+                            maxAttempts: 3,
+                            baseDelay: TimeSpan.FromSeconds(1),
+                            operationName: $"fetching thread {threadId} messages");
                         threads[threadId] = threadList.ToList();
                     }
                 }
 
-                Console.WriteLine($"Found {threads.Count} threads.");
+                LoggingConfiguration.Logger.Information("Found {ThreadCount} threads.", threads.Count);
 
                 // Determine file extension based on compression method
                 var expectedExtension = compression.ToLowerInvariant() switch
@@ -102,25 +178,24 @@ namespace GMailThreadExtractor
                     _ => ".tar.lzma" // Default to LZMA
                 };
 
-                if (!outputPath.EndsWith(expectedExtension))
-                {
-                    outputPath = outputPath + expectedExtension;
-                }
+                outputPath = EnsureExpectedExtension(outputPath, expectedExtension);
 
-                // Download the emails and save them in a new dictionary.
-                var emailDictionary = new Dictionary<ulong, List<MessageBlob>>();
-                var maxSizeBytes = (maxMessageSizeMB ?? 10) * 1024 * 1024; // Default 10MB limit
+                // Use streaming compression to minimize memory usage
+                var maxSizeMB = maxMessageSizeMB ?? 10; // Default 10MB limit
 
-                foreach (var thread in threads)
+                // Create message fetcher delegate for streaming
+                MessageFetcher messageFetcher = async (messageSummary) =>
                 {
-                    emailDictionary[thread.Key] = new List<MessageBlob>();
-                    foreach (var message in thread.Value)
-                    {
-                        var mimeEmail = await allMail.GetMessageAsync(message.UniqueId);
-                        var email = MessageWriter.MessageToBlob(message, mimeEmail, maxSizeBytes);
-                        emailDictionary[thread.Key].Add(email);
-                    }
-                }
+                    // Download email message with retry logic
+                    var mimeEmail = await RetryHelper.ExecuteWithRetryAsync(
+                        async () => await allMail.GetMessageAsync(messageSummary.UniqueId),
+                        maxAttempts: 3,
+                        baseDelay: TimeSpan.FromSeconds(1),
+                        operationName: $"downloading message {messageSummary.UniqueId}");
+
+                    var maxSizeBytes = maxSizeMB * 1024L * 1024L;
+                    return MessageWriter.MessageToBlob(messageSummary, mimeEmail, maxSizeBytes);
+                };
 
                 // Select compressor based on compression method
                 ICompressor compressor;
@@ -134,8 +209,11 @@ namespace GMailThreadExtractor
                         compressor = new LZMACompressor();
                         break;
                 }
-                await compressor.Compress(outputPath, emailDictionary);
-                Console.WriteLine($"All done! Emails saved to {outputPath}");
+
+                // Use streaming compression instead of pre-loading all messages
+                LoggingConfiguration.Logger.Information("Starting streaming compression to minimize memory usage...");
+                await compressor.CompressStreaming(outputPath, threads, messageFetcher, maxSizeMB);
+                LoggingConfiguration.Logger.Information("All done! Emails saved to {OutputPath}", outputPath);
             }
         }
     }

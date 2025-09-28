@@ -1,5 +1,7 @@
 using System.Text;
 using ICSharpCode.SharpZipLib.Tar;
+using MailKit;
+using Shared;
 
 namespace ArchivalSupport;
 
@@ -23,7 +25,7 @@ public static class BaseCompressor
         {
             if (thread.Value.Count == 0)
             {
-                Console.WriteLine($"Thread ID: {thread.Key} contained no messages. Skipping.");
+                LoggingConfiguration.Logger.Warning("Thread ID: {ThreadId} contained no messages. Skipping.", thread.Key);
                 continue;
             }
 
@@ -33,13 +35,13 @@ public static class BaseCompressor
             tarStream.PutNextEntry(folderEntry);
             tarStream.CloseEntry();
 
-            Console.WriteLine($"Thread ID: {thread.Key}");
+            LoggingConfiguration.Logger.Information("Processing Thread ID: {ThreadId}", thread.Key);
 
             foreach (var message in thread.Value)
             {
                 try
                 {
-                    Console.WriteLine(message.ToString());
+                    LoggingConfiguration.Logger.Debug("Processing message: {MessageInfo}", message.ToString());
 
                     // Save the message to the tar file
                     var outputEmlPath = $"{folderName}{message.FileName}";
@@ -68,23 +70,123 @@ public static class BaseCompressor
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"Error writing message to tar: {ex.Message}");
+                        ErrorHandler.Handle(ErrorCategory.Compression,
+                            "Failed to write message to tar archive",
+                            ex,
+                            $"Message: {message.FileName}");
                     }
                     finally
                     {
                         tarStream.CloseEntry();
                     }
 
-                    Console.WriteLine($"Saved to: {outputPath}/{outputEmlPath}");
-                    Console.WriteLine();
+                    LoggingConfiguration.Logger.Debug("Saved message to: {OutputPath}", $"{outputPath}/{outputEmlPath}");
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error processing message: {ex.Message}");
+                    ErrorHandler.Handle(ErrorCategory.EmailProcessing,
+                        "Error processing message for archival",
+                        ex,
+                        $"Message ID: {message.UniqueId}");
                 }
             }
 
-            Console.WriteLine($"Saved thread to: {outputPath}/{folderName}");
+            LoggingConfiguration.Logger.Information("Saved thread to: {ThreadPath}", $"{outputPath}/{folderName}");
+        }
+
+        await tarStream.FlushAsync();
+    }
+
+    /// <summary>
+    /// Writes email threads to a tar archive stream using streaming download to minimize memory usage.
+    /// Messages are fetched on-demand during compression rather than pre-loaded.
+    /// </summary>
+    /// <param name="outputPath">The output path for the archive file.</param>
+    /// <param name="tarStream">The tar output stream to write to.</param>
+    /// <param name="threads">A dictionary mapping thread IDs to lists of IMessageSummary objects.</param>
+    /// <param name="messageFetcher">Delegate to fetch message content on-demand.</param>
+    /// <param name="maxMessageSizeMB">Maximum message size in MB for streaming threshold.</param>
+    public static async Task WriteThreadsToTarStreaming(
+        string outputPath,
+        TarOutputStream tarStream,
+        Dictionary<ulong, List<IMessageSummary>> threads,
+        MessageFetcher messageFetcher,
+        int maxMessageSizeMB = 10)
+    {
+        foreach (var thread in threads)
+        {
+            if (thread.Value.Count == 0)
+            {
+                LoggingConfiguration.Logger.Warning("Thread ID: {ThreadId} contained no messages. Skipping.", thread.Key);
+                continue;
+            }
+
+            var folderSegment = SafeNameBuilder.BuildThreadDirectoryName(thread.Key, thread.Value[0].Envelope?.Subject);
+            var folderName = $"{folderSegment}/";
+            var folderEntry = TarEntry.CreateTarEntry(folderName);
+            tarStream.PutNextEntry(folderEntry);
+            tarStream.CloseEntry();
+
+            LoggingConfiguration.Logger.Information("Processing Thread ID: {ThreadId}", thread.Key);
+
+            foreach (var messageSummary in thread.Value)
+            {
+                try
+                {
+                    LoggingConfiguration.Logger.Debug("Processing message {MessageId} (Subject: {Subject})", messageSummary.UniqueId, messageSummary.Envelope?.Subject ?? "No Subject");
+
+                    // Fetch message on-demand
+                    var messageBlob = await messageFetcher(messageSummary);
+
+                    // Save the message to the tar file
+                    var outputEmlPath = $"{folderName}{messageBlob.FileName}";
+                    var tarEntry = TarEntry.CreateTarEntry(outputEmlPath);
+                    tarEntry.Size = messageBlob.Size;
+                    tarEntry.ModTime = messageBlob.Date.ToUniversalTime();
+                    tarStream.PutNextEntry(tarEntry);
+                    try
+                    {
+                        if (messageBlob.IsStreaming)
+                        {
+                            // Use streaming for large messages
+                            if (messageBlob.StreamFunc != null)
+                            {
+                                await messageBlob.StreamFunc(tarStream);
+                            }
+                        }
+                        else
+                        {
+                            // Use in-memory data for small messages
+                            if (messageBlob.Blob != null)
+                            {
+                                await tarStream.WriteAsync(messageBlob.Blob);
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        ErrorHandler.Handle(ErrorCategory.Compression,
+                            "Failed to write message to tar archive",
+                            ex,
+                            $"Message: {messageBlob.FileName}");
+                    }
+                    finally
+                    {
+                        tarStream.CloseEntry();
+                    }
+
+                    LoggingConfiguration.Logger.Debug("Saved message to: {OutputPath}", $"{outputPath}/{outputEmlPath}");
+                }
+                catch (Exception ex)
+                {
+                    ErrorHandler.Handle(ErrorCategory.EmailProcessing,
+                        "Error processing message for streaming archival",
+                        ex,
+                        $"Message ID: {messageSummary.UniqueId}");
+                }
+            }
+
+            LoggingConfiguration.Logger.Information("Saved thread to: {ThreadPath}", $"{outputPath}/{folderName}");
         }
 
         await tarStream.FlushAsync();

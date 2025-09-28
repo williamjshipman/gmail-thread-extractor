@@ -22,12 +22,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\GMailThreadExtractor\GMailThreadExtractor.csproj" />
     <ProjectReference Include="..\..\src\ArchivalSupport\ArchivalSupport.csproj" />
     <ProjectReference Include="..\..\src\Shared\Shared.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <Using Include="Xunit" />
+    <Using Include="FluentAssertions" />
   </ItemGroup>
 
 </Project>

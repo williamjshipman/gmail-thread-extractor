@@ -1,6 +1,8 @@
 ﻿using System.Text;
 using ICSharpCode.SharpZipLib.Tar;
 using SevenZip;
+using MailKit;
+using Shared;
 
 namespace ArchivalSupport;
 
@@ -66,12 +68,12 @@ public class LZMACompressor : ICompressor
     /// <returns>A task representing the asynchronous compression operation.</returns>
     public async Task Compress(string outputPath, Dictionary<ulong, List<MessageBlob>> threads)
     {
-        string tempTarFilePath = Path.Combine(Path.GetTempPath(), $"lzma_temp_{Guid.NewGuid():N}.tar");
+        var (tempFileStream, tempTarFilePath) = SecureIOUtilities.CreateSecureTempFile("lzma_temp", ".tar");
 
         try
         {
             // Step 1: Create tar file with streaming I/O (low memory usage)
-            using (var tempFileStream = new FileStream(tempTarFilePath, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 8192))
+            using (tempFileStream)
             {
                 using (var tarStream = new TarOutputStream(tempFileStream, Encoding.UTF8))
                 {
@@ -104,7 +106,10 @@ public class LZMACompressor : ICompressor
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error during compression: {ex.Message}");
+            ErrorHandler.Handle(ErrorCategory.Compression,
+                "LZMA compression failed",
+                ex,
+                $"Output file: {outputPath}");
             try
             {
                 // Delete the output file if it exists and is potentially corrupted
@@ -113,22 +118,92 @@ public class LZMACompressor : ICompressor
             }
             catch (Exception ex2)
             {
-                Console.WriteLine($"Warning: Unable to delete output file {outputPath}. {ex2.Message}");
+                LoggingConfiguration.Logger.Warning("Unable to delete output file {OutputPath}: {ErrorMessage}", outputPath, ex2.Message);
             }
             throw; // Re-throw to maintain error handling contract
         }
         finally
         {
             // Always clean up temporary file
+            SecureIOUtilities.SafeDeleteFile(tempTarFilePath);
+        }
+    }
+
+    /// <summary>
+    /// Compresses email threads using streaming download to minimize memory usage.
+    /// Uses a two-pass approach: first pass calculates size, second pass performs compression.
+    /// Messages are fetched on-demand during both passes to minimize memory usage.
+    /// </summary>
+    /// <param name="outputPath">The output file path for the compressed archive.</param>
+    /// <param name="threads">A dictionary mapping thread IDs to lists of IMessageSummary objects.</param>
+    /// <param name="messageFetcher">Delegate to fetch message content on-demand.</param>
+    /// <param name="maxMessageSizeMB">Maximum message size in MB for streaming threshold.</param>
+    /// <returns>A task representing the asynchronous compression operation.</returns>
+    public async Task CompressStreaming(string outputPath, Dictionary<ulong, List<IMessageSummary>> threads, MessageFetcher messageFetcher, int maxMessageSizeMB = 10)
+    {
+        var (tempFileStream, tempTarFilePath) = SecureIOUtilities.CreateSecureTempFile("lzma_streaming_temp", ".tar");
+
+        try
+        {
+            LoggingConfiguration.Logger.Information("LZMA streaming compression: Creating tar archive...");
+
+            // Pass 1: Create tar file using streaming (one message at a time)
+            using (tempFileStream)
+            {
+                using (var tarStream = new TarOutputStream(tempFileStream, Encoding.UTF8))
+                {
+                    await BaseCompressor.WriteThreadsToTarStreaming(outputPath, tarStream, threads, messageFetcher, maxMessageSizeMB);
+                }
+            }
+
+            LoggingConfiguration.Logger.Information("LZMA streaming compression: Compressing tar archive...");
+
+            // Pass 2: Compress the tar file with streaming I/O
+            var tempFileInfo = new FileInfo(tempTarFilePath);
+            long uncompressedSize = tempFileInfo.Length;
+
+            using (var outputStream = new FileStream(outputPath, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 8192))
+            {
+                // Write LZMA properties
+                encoder.WriteCoderProperties(outputStream);
+
+                // Write uncompressed size (8 bytes)
+                for (int i = 0; i < 8; i++)
+                    outputStream.WriteByte((byte)(uncompressedSize >> (8 * i)));
+
+                // Compress the tar file with streaming
+                using (var inputStream = new FileStream(tempTarFilePath, FileMode.Open, FileAccess.Read, FileShare.Read, bufferSize: 8192))
+                {
+                    encoder.Code(inputStream, outputStream, uncompressedSize, -1, null);
+                }
+
+                await outputStream.FlushAsync();
+            }
+
+            LoggingConfiguration.Logger.Information("LZMA streaming compression: Complete!");
+        }
+        catch (Exception ex)
+        {
+            ErrorHandler.Handle(ErrorCategory.Compression,
+                "LZMA streaming compression failed",
+                ex,
+                $"Output file: {outputPath}");
             try
             {
-                if (File.Exists(tempTarFilePath))
-                    File.Delete(tempTarFilePath);
+                // Delete the output file if it exists and is potentially corrupted
+                if (File.Exists(outputPath))
+                    File.Delete(outputPath);
             }
-            catch (Exception ex)
+            catch (Exception ex2)
             {
-                Console.WriteLine($"Warning: Unable to delete temporary file {tempTarFilePath}. {ex.Message}");
+                LoggingConfiguration.Logger.Warning("Unable to delete output file {OutputPath}: {ErrorMessage}", outputPath, ex2.Message);
             }
+            throw; // Re-throw to maintain error handling contract
+        }
+        finally
+        {
+            // Always clean up temporary file
+            SecureIOUtilities.SafeDeleteFile(tempTarFilePath);
         }
     }
 }

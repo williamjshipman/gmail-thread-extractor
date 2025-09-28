@@ -1,12 +1,23 @@
 # gmail-thread-extractor
 
+![CI](https://github.com/williamjshipman/gmail-thread-extractor/actions/workflows/ci.yml/badge.svg?branch=main)
+![Coverage](https://raw.githubusercontent.com/williamjshipman/gmail-thread-extractor/gh-pages/coverage/badge_linecoverage.svg)
+
 A tool for extracting and saving an entire thread of messages from GMail
 
 ## Description
 
-This command line tool allows you to download all email threads that match a given search term and/or label from your GMail account. It uses the IMAP protocol to connect to your GMail account and download the messages. The messages are saved as .eml files in a compressed archive (tar.lzma or tar.gz). Each thread is saved in a separate folder in the archive.
+This robust command line tool downloads complete email threads that match search terms and/or labels from your GMail account. It uses IMAP protocols with comprehensive error handling and retry logic to reliably extract messages. The messages are saved as .eml files in compressed archives (tar.lzma or tar.gz) with secure file permissions. Each thread is organized in separate folders within the archive.
 
-I created this tool to help me to download important email threads that were taking up too much space in my GMail account, so I could archive them somewhere and delete them in GMail.
+**Key Features:**
+- **Secure file handling**: Platform-specific file permissions (Windows ACLs, Unix 600)
+- **Reliable**: Exponential backoff retry logic for network failures
+- **Memory-efficient**: Streaming support for large emails
+- **Cross-platform**: Works on Windows, macOS, and Linux
+- **Configurable**: JSON configuration with validation
+- **Well-tested**: 120+ unit and integration tests
+
+I created this tool to help archive important email threads that were taking up space in GMail, allowing for safe local storage and deletion from the online account.
 
 ## Prerequisites
 
@@ -40,7 +51,7 @@ cd gmail-thread-extractor
 2. Run the project with the following command:
 
 ```bash
-dotnet run --project .\src\GMailThreadExtractor\ --email <email> --password <app password> --search "<search terms>" --output <output file> --compression <lzma|gzip> --timeout <minutes>
+dotnet run --project .\src\GMailThreadExtractor\ --email <email> --password <app password> --search "<search terms>" --output <output file> --compression <lzma|gzip> --timeout <minutes> --max-message-size <MB>
 ```
 
 Replace `<email>` with your GMail email address, `<app password>` with the app password you generated, `<search terms>` with the search terms you want to use to find the thread, and `<output file>` with the path to the file where you want to save the threads that were found.
@@ -48,20 +59,43 @@ Replace `<email>` with your GMail email address, `<app password>` with the app p
 **Arguments:**
 - `--email` and `--password` are optional (you will be prompted if not provided)
 - `--search` and `--output` are required
-- `--compression` is optional (defaults to "lzma") - choose "lzma" for .tar.lzma or "gzip" for .tar.gz
+- `--compression` is optional (defaults to "lzma", case-insensitive) - choose "lzma" for .tar.lzma or "gzip" for .tar.gz
 - `--config` is optional - specify a JSON configuration file path
 - `--label` is optional - filter by Gmail label
 - `--timeout` is optional (defaults to 5 minutes, range: 1-60 minutes) - IMAP operation timeout
+- `--max-message-size` is optional (defaults to 10 MB, range: 1-1000 MB) - streaming threshold for large messages
 
 ## Testing
 
-Run the unit suite from the repository root:
+The project includes comprehensive unit and integration tests covering all major functionality:
 
 ```bash
+# Run all tests (120+ tests)
 dotnet test
+
+# Run specific test project
+dotnet test test/GMailThreadExtractor.Tests/
+dotnet test test/ArchivalSupport.Tests/
+
+# Run with verbose output
+dotnet test --verbosity normal
 ```
 
-This executes the xUnit project under `test/ArchivalSupport.Tests`, which validates the archive naming and sanitization helpers. Add future suites alongside it and keep tests hermetic (no live network or filesystem writes outside temp locations).
+**Test Coverage:**
+- **120 total tests** with 100% pass rate
+- Configuration validation and error handling
+- Retry logic with exponential backoff
+- Cross-platform secure file operations
+- Compression algorithms (LZMA, Gzip)
+- Memory management and streaming
+- Error categorization and recovery strategies
+- Integration workflows with mock data
+
+All tests are hermetic (no live network connections or filesystem writes outside temp locations).
+
+## Continuous Integration
+
+Automated builds run on GitHub Actions for every push and pull request targeting `main`. The pipeline restores dependencies, builds the solution in Release mode, runs the full test suite with code coverage collection, and publishes detailed coverage reports and SVG badges to the `gh-pages` branch.
 
 ## Configuration File
 
@@ -77,7 +111,8 @@ You can use a JSON configuration file to provide default values for command-line
   "label": "Important",
   "output": "extracted-emails",
   "compression": "lzma",
-  "timeoutMinutes": 5
+  "timeoutMinutes": 5,
+  "maxMessageSizeMB": 10
 }
 ```
 
@@ -94,25 +129,35 @@ dotnet run --project .\src\GMailThreadExtractor\ --config config.json
 
 ## Features
 
-:white_check_mark: Download all email threads that match a given search term and/or label from your GMail account.\
-:white_check_mark: Save the messages as .eml files in compressed archives (tar.lzma or tar.gz).\
-:white_check_mark: Multiple compression options: LZMA (7zip) or Gzip compression.\
-:white_check_mark: Each thread is saved in a separate folder in the archive.\
-:white_check_mark: JSON configuration file support for default settings.\
-:white_check_mark: Command-line options take precedence over configuration files.\
-:white_check_mark: Sanitized archive names remain portable across operating systems.
+:white_check_mark: Download all email threads that match search terms and/or labels from your GMail account\
+:white_check_mark: Save messages as .eml files in compressed archives (tar.lzma or tar.gz)\
+:white_check_mark: Multiple compression options: LZMA (64MB dictionary) or Gzip (level 9) compression\
+:white_check_mark: Each thread organized in separate folders within the archive\
+:white_check_mark: JSON configuration file support with validation and comments support\
+:white_check_mark: Command-line options take precedence over configuration files\
+:white_check_mark: Sanitized archive names remain portable across operating systems\
+:white_check_mark: **Secure file handling**: Platform-specific permissions (Windows ACLs, Unix 600)\
+:white_check_mark: **Reliability**: Exponential backoff retry logic for network failures\
+:white_check_mark: **Memory efficiency**: Streaming support for large emails (configurable threshold)\
+:white_check_mark: **Cross-platform**: Works on Windows, macOS, and Linux\
+:white_check_mark: **Comprehensive testing**: 120+ unit and integration tests\
+:white_check_mark: **Error handling**: Structured error categorization and recovery strategies
 
 ## Roadmap
 
 The following features and modifications are planned for the future:
 
-- [x] Add support for tar.gz compression format.
-- [ ] Add support for tar.xz format.
-- [ ] Get proper .7z support working, at the moment the 7zip SDK is used to create tar.lzma files.
-- [ ] Add support for OAuth2 authentication, although a low priority since the config is a pain.
-- [x] Clean up the code, splitting it into smaller classes.
-- [x] Add initial unit tests for archive naming and sanitization.
-- [ ] CI/CD pipeline using GitHub Actions - one day...
+- [x] Add support for tar.gz compression format
+- [x] Clean up the code, splitting it into smaller classes
+- [x] Add comprehensive unit and integration tests (120+ tests)
+- [x] Add secure file handling with platform-specific permissions
+- [x] Add retry logic with exponential backoff for reliability
+- [x] Add streaming support for memory-efficient large message handling
+- [x] Add structured error handling and categorization
+- [ ] Add support for tar.xz format
+- [ ] Get proper .7z support working (currently using 7zip SDK for tar.lzma)
+- [ ] Add support for OAuth2 authentication (low priority due to configuration complexity)
+- [x] CI/CD pipeline using GitHub Actions
 
 ## License
 
@@ -120,11 +165,24 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 
 ## Project structure
 
-The project is split into `src/` and `test/` folders. The `src/` folder contains the production code, and the `test/` folder houses xUnit projects.
+The project is organized into `src/` and `test/` folders with a clean separation of concerns:
 
-- `src/GMailThreadExtractor`: The main executable project folder containing the CLI and configuration utilities.
-- `src/ArchivalSupport`: Compression and archival helpers, including the path-sanitization utilities.
-- `test/ArchivalSupport.Tests`: xUnit suite that exercises `SafeNameBuilder` and future archival helpers.
+**Source Projects:**
+- `src/GMailThreadExtractor`: Main executable with CLI, configuration, retry logic, and IMAP operations
+- `src/ArchivalSupport`: Compression, archival, and message processing utilities
+- `src/Shared`: Common infrastructure (logging, error handling, secure file operations)
+
+**Test Projects:**
+- `test/GMailThreadExtractor.Tests`: Comprehensive tests for main application components (93 tests)
+- `test/ArchivalSupport.Tests`: Tests for compression and archival functionality (27 tests)
+
+**Key Components:**
+- Configuration loading and validation with JSON support
+- Platform-specific secure file operations (Windows ACLs, Unix permissions)
+- Retry logic with exponential backoff for network reliability
+- Memory-efficient streaming for large email messages
+- Structured error handling with categorization
+- Safe filename generation for cross-platform compatibility
 
 ## Contributing
 
