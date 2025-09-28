@@ -19,11 +19,11 @@ public class ErrorHandlingTests
         ErrorHandler.ClearErrors();
         var socketException = new SocketException();
 
-        // Act
-        var shouldContinue = ErrorHandler.HandleException(socketException, "Test network operation");
+        // Act & Assert
+        var act = () => ErrorHandler.HandleException(socketException, "Test network operation");
+        act.Should().Throw<ApplicationException>(); // Network errors should throw by default
 
-        // Assert
-        shouldContinue.Should().BeFalse(); // Network errors throw by default
+        // Verify the error was logged
         ErrorHandler.Errors.Should().HaveCount(1);
         ErrorHandler.Errors[0].Category.Should().Be(ErrorCategory.Network);
         ErrorHandler.Errors[0].InnerException.Should().Be(socketException);
@@ -37,11 +37,11 @@ public class ErrorHandlingTests
         ErrorHandler.ClearErrors();
         var ioException = new IOException("File not found");
 
-        // Act
-        var shouldContinue = ErrorHandler.HandleException(ioException, "File operation");
+        // Act & Assert
+        var act = () => ErrorHandler.HandleException(ioException, "File operation");
+        act.Should().Throw<ApplicationException>(); // Non-recoverable file errors should throw by default
 
-        // Assert
-        shouldContinue.Should().BeFalse(); // Non-recoverable file errors throw
+        // Verify the error was logged
         ErrorHandler.Errors.Should().HaveCount(1);
         ErrorHandler.Errors[0].Category.Should().Be(ErrorCategory.FileSystem);
     }
@@ -53,11 +53,11 @@ public class ErrorHandlingTests
         ErrorHandler.ClearErrors();
         var argException = new ArgumentException("Invalid configuration");
 
-        // Act
-        var shouldContinue = ErrorHandler.HandleException(argException);
+        // Act & Assert
+        var act = () => ErrorHandler.HandleException(argException);
+        act.Should().Throw<ApplicationException>(); // Configuration errors should throw by default
 
-        // Assert
-        shouldContinue.Should().BeFalse(); // Configuration errors should throw
+        // Verify the error was logged
         ErrorHandler.Errors.Should().HaveCount(1);
         ErrorHandler.Errors[0].Category.Should().Be(ErrorCategory.Configuration);
     }
@@ -199,7 +199,8 @@ public class ErrorHandlingTests
     [Fact]
     public void ClearErrors_ShouldRemoveAllErrors()
     {
-        // Arrange
+        // Arrange - Clear any existing errors from other tests first
+        ErrorHandler.ClearErrors();
         ErrorHandler.Handle(ErrorCategory.System, "Test error", strategy: ErrorHandlingStrategy.LogAndContinue);
         ErrorHandler.Errors.Should().HaveCount(1);
 
