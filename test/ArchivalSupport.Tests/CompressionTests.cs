@@ -473,25 +473,83 @@ public class CompressionTests : IDisposable
         using var xzStream = new XZStream(fileStream, decompressOptions);
         xzStream.CopyTo(decompressedStream);
 
-        // Now read the decompressed tar content
+        // Now read the decompressed tar content and verify both structure and content
         decompressedStream.Position = 0;
         using var tarStream = new TarInputStream(decompressedStream, System.Text.Encoding.UTF8);
 
-        var foundEntries = new List<string>();
+        var foundFiles = new Dictionary<string, byte[]>();
+        var foundDirectories = new List<string>();
         TarEntry? entry;
 
+        // Extract all files and directories from the tar archive
         while ((entry = tarStream.GetNextEntry()) != null)
         {
-            foundEntries.Add(entry.Name);
+            if (entry.IsDirectory)
+            {
+                foundDirectories.Add(entry.Name);
+            }
+            else
+            {
+                // Read the file content
+                var fileContent = new byte[entry.Size];
+                int totalBytesRead = 0;
+                while (totalBytesRead < entry.Size)
+                {
+                    int bytesRead = tarStream.Read(fileContent, totalBytesRead, (int)(entry.Size - totalBytesRead));
+                    if (bytesRead == 0) break; // End of stream
+                    totalBytesRead += bytesRead;
+                }
+                foundFiles[entry.Name] = fileContent;
+            }
         }
 
-        // Verify that all original thread IDs are present
+        // Verify that all original thread IDs are present as directories
         foreach (var threadId in originalThreads.Keys)
         {
-            foundEntries.Should().Contain(name => name.Contains(threadId.ToString()));
+            foundDirectories.Should().Contain(name => name.Contains(threadId.ToString()));
+        }
+
+        // Verify that each original message is present with correct content
+        foreach (var thread in originalThreads)
+        {
+            var threadId = thread.Key;
+            var messages = thread.Value;
+
+            foreach (var originalMessage in messages)
+            {
+                // Find the corresponding file in the archive
+                var expectedFileName = foundFiles.Keys.FirstOrDefault(fileName =>
+                    fileName.Contains(threadId.ToString()) &&
+                    fileName.EndsWith(".eml") &&
+                    fileName.Contains(originalMessage.UniqueId));
+
+                expectedFileName.Should().NotBeNull($"Message {originalMessage.UniqueId} should be present in thread {threadId}");
+
+                // Verify the file content matches the original message blob
+                var archivedContent = foundFiles[expectedFileName!];
+                archivedContent.Should().NotBeNull("Archived file content should not be null");
+                archivedContent.Length.Should().BeGreaterThan(0, "Archived file should have content");
+
+                // Compare the actual binary content
+                if (originalMessage.Blob != null)
+                {
+                    archivedContent.Should().Equal(originalMessage.Blob,
+                        $"Content of archived message {originalMessage.UniqueId} should match original blob");
+                }
+                else if (originalMessage.IsStreaming && originalMessage.StreamFunc != null)
+                {
+                    // For streaming messages, we need to get the content via the stream function
+                    using var originalContentStream = new MemoryStream();
+                    originalMessage.StreamFunc(originalContentStream).Wait();
+                    var originalContent = originalContentStream.ToArray();
+
+                    archivedContent.Should().Equal(originalContent,
+                        $"Content of archived streaming message {originalMessage.UniqueId} should match original stream content");
+                }
+            }
         }
 
         // Should have message files
-        foundEntries.Should().Contain(name => name.EndsWith(".eml"));
+        foundFiles.Keys.Should().Contain(name => name.EndsWith(".eml"), "Archive should contain .eml message files");
     }
 }
