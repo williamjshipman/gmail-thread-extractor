@@ -104,28 +104,36 @@ public class IntegrationTests : IDisposable
         var threads = CreateTestThreadsWithRealisticData();
         var lzmaPath = CreateTempFilePath(".tar.lzma");
         var gzipPath = CreateTempFilePath(".tar.gz");
+        var xzPath = CreateTempFilePath(".tar.xz");
 
         var lzmaCompressor = new ArchivalSupport.LZMACompressor();
         var gzipCompressor = new ArchivalSupport.TarGzipCompressor();
+        var xzCompressor = new ArchivalSupport.TarXzCompressor();
 
         // Act
         await lzmaCompressor.Compress(lzmaPath, threads);
         await gzipCompressor.Compress(gzipPath, threads);
+        await xzCompressor.Compress(xzPath, threads);
 
         // Assert
         File.Exists(lzmaPath).Should().BeTrue();
         File.Exists(gzipPath).Should().BeTrue();
+        File.Exists(xzPath).Should().BeTrue();
 
         var lzmaSize = new FileInfo(lzmaPath).Length;
         var gzipSize = new FileInfo(gzipPath).Length;
+        var xzSize = new FileInfo(xzPath).Length;
 
         // Both should create valid archives
         lzmaSize.Should().BeGreaterThan(0);
         gzipSize.Should().BeGreaterThan(0);
+        xzSize.Should().BeGreaterThan(0);
 
         // Generally LZMA should provide better compression for text data
         // (though this isn't guaranteed for small test data)
         Math.Abs(lzmaSize - gzipSize).Should().BeGreaterThan(0);
+        Math.Abs(lzmaSize - xzSize).Should().BeGreaterThan(0);
+        Math.Abs(gzipSize - xzSize).Should().BeGreaterThan(0);
     }
 
     [Fact]

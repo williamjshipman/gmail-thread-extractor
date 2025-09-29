@@ -55,6 +55,17 @@ namespace GMailThreadExtractor
                 return basePath + ".tar.lzma";
             }
 
+            if (normalizedExpected.Equals(".tar.xz", StringComparison.OrdinalIgnoreCase))
+            {
+                basePath = RemoveSuffix(basePath, ".tar.xz") ??
+                           RemoveSuffix(basePath, ".tar.lzma") ??
+                           RemoveSuffix(basePath, ".tar.gz") ??
+                           RemoveSuffix(basePath, ".txz") ??
+                           RemoveSuffix(basePath, ".xz") ??
+                           basePath;
+                return basePath + ".tar.xz";
+            }
+
             basePath = Path.ChangeExtension(outputPath, normalizedExpected.TrimStart('.'));
             return basePath.EndsWith(normalizedExpected, StringComparison.OrdinalIgnoreCase)
                 ? basePath
@@ -175,6 +186,7 @@ namespace GMailThreadExtractor
                 var expectedExtension = compression.ToLowerInvariant() switch
                 {
                     "gzip" => ".tar.gz",
+                    "xz" => ".tar.xz",
                     _ => ".tar.lzma" // Default to LZMA
                 };
 
@@ -203,6 +215,9 @@ namespace GMailThreadExtractor
                 {
                     case "gzip":
                         compressor = new TarGzipCompressor();
+                        break;
+                    case "xz":
+                        compressor = new TarXzCompressor();
                         break;
                     case "lzma":
                     default:

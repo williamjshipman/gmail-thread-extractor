@@ -175,7 +175,7 @@ namespace GMailThreadExtractor
             if (string.IsNullOrWhiteSpace(Compression))
                 return; // Will use default
 
-            var validCompressions = new[] { "lzma", "gzip" };
+            var validCompressions = new[] { "lzma", "gzip", "xz" };
             if (!validCompressions.Contains(Compression.ToLowerInvariant()))
             {
                 throw new ArgumentException($"Compression method must be one of: {string.Join(", ", validCompressions)}");

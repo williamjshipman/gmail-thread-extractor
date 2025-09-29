@@ -157,6 +157,9 @@ public class ConfigTests : IDisposable
     [InlineData("gzip")]
     [InlineData("GZIP")]
     [InlineData("Gzip")]
+    [InlineData("xz")]
+    [InlineData("XZ")]
+    [InlineData("Xz")]
     public void Validate_WithValidCompressionCaseInsensitive_ShouldNotThrow(string compression)
     {
         // Arrange
@@ -182,8 +185,8 @@ public class ConfigTests : IDisposable
     }
 
     [Theory]
-    [InlineData("invalid", "Compression method must be one of: lzma, gzip")]
-    [InlineData("zip", "Compression method must be one of: lzma, gzip")]
+    [InlineData("invalid", "Compression method must be one of: lzma, gzip, xz")]
+    [InlineData("zip", "Compression method must be one of: lzma, gzip, xz")]
     public void Validate_WithInvalidCompression_ShouldThrow(string compression, string expectedMessage)
     {
         // Arrange
