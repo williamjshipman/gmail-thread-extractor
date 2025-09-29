@@ -9,6 +9,7 @@ using MimeKit;
 using Moq;
 using FluentAssertions;
 using ArchivalSupport;
+using Joveler.Compression.XZ;
 
 namespace ArchivalSupport.Tests;
 
@@ -16,6 +17,53 @@ public class CompressionTests : IDisposable
 {
     private readonly string _testDirectory;
     private readonly List<string> _tempFiles;
+
+    static CompressionTests()
+    {
+        // Initialize Joveler.Compression.XZ library for tests with error handling
+        try
+        {
+            // Try to locate the correct native library based on platform
+            var baseDir = Path.GetDirectoryName(typeof(CompressionTests).Assembly.Location);
+            var runtimeDir = Path.Combine(baseDir!, "runtimes");
+
+            string? nativeLibPath = null;
+            if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows))
+            {
+                if (System.Runtime.InteropServices.RuntimeInformation.OSArchitecture == System.Runtime.InteropServices.Architecture.X64)
+                {
+                    nativeLibPath = Path.Combine(runtimeDir, "win-x64", "native", "liblzma.dll");
+                }
+                else if (System.Runtime.InteropServices.RuntimeInformation.OSArchitecture == System.Runtime.InteropServices.Architecture.X86)
+                {
+                    nativeLibPath = Path.Combine(runtimeDir, "win-x86", "native", "liblzma.dll");
+                }
+                else if (System.Runtime.InteropServices.RuntimeInformation.OSArchitecture == System.Runtime.InteropServices.Architecture.Arm64)
+                {
+                    nativeLibPath = Path.Combine(runtimeDir, "win-arm64", "native", "liblzma.dll");
+                }
+            }
+
+            if (nativeLibPath != null && File.Exists(nativeLibPath))
+            {
+                System.Console.WriteLine($"Attempting to initialize XZ with library at: {nativeLibPath}");
+                XZInit.GlobalInit(nativeLibPath);
+            }
+            else
+            {
+                System.Console.WriteLine($"Native library path not found or doesn't exist: {nativeLibPath}");
+                System.Console.WriteLine("Trying default initialization...");
+                XZInit.GlobalInit();
+            }
+        }
+        catch (Exception ex)
+        {
+            // Log the specific error but don't fail static initialization
+            System.Console.WriteLine($"XZ initialization failed: {ex.Message}");
+            System.Console.WriteLine($"Stack trace: {ex.StackTrace}");
+            throw; // Re-throw to see the error in tests
+        }
+    }
 
     public CompressionTests()
     {
@@ -119,6 +167,26 @@ public class CompressionTests : IDisposable
     }
 
     [Fact]
+    public async Task TarXzCompressor_Compress_ShouldCreateValidArchive()
+    {
+        // Arrange
+        var compressor = new TarXzCompressor();
+        var threads = CreateTestThreads();
+        var outputPath = CreateTempFilePath(".tar.xz");
+
+        // Act
+        await compressor.Compress(outputPath, threads);
+
+        // Assert
+        File.Exists(outputPath).Should().BeTrue();
+        var fileInfo = new FileInfo(outputPath);
+        fileInfo.Length.Should().BeGreaterThan(0);
+
+        // Verify the compressed file structure by decompressing and checking tar content
+        VerifyTarXzArchiveContent(outputPath, threads);
+    }
+
+    [Fact]
     public async Task LZMACompressor_CompressStreaming_ShouldCreateValidArchive()
     {
         // Arrange
@@ -172,26 +240,57 @@ public class CompressionTests : IDisposable
     }
 
     [Fact]
+    public async Task TarXzCompressor_CompressStreaming_ShouldCreateValidArchive()
+    {
+        // Arrange
+        var compressor = new TarXzCompressor();
+        var threads = CreateTestStreamingThreads();
+        var outputPath = CreateTempFilePath(".tar.xz");
+
+        MessageFetcher messageFetcher = async (summary) =>
+        {
+            await Task.Delay(1);
+            return CreateTestMessageBlob(
+                summary.Envelope?.Subject ?? "Test Subject",
+                summary.Envelope?.From?.ToString() ?? "test@example.com",
+                "Streaming message content");
+        };
+
+        // Act
+        await compressor.CompressStreaming(outputPath, threads, messageFetcher);
+
+        // Assert
+        File.Exists(outputPath).Should().BeTrue();
+        var fileInfo = new FileInfo(outputPath);
+        fileInfo.Length.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
     public async Task Compressors_WithEmptyThreads_ShouldCreateEmptyArchive()
     {
         // Arrange
         var lzmaCompressor = new LZMACompressor();
         var gzipCompressor = new TarGzipCompressor();
+        var xzCompressor = new TarXzCompressor();
         var emptyThreads = new Dictionary<ulong, List<MessageBlob>>();
         var lzmaPath = CreateTempFilePath(".tar.lzma");
         var gzipPath = CreateTempFilePath(".tar.gz");
+        var xzPath = CreateTempFilePath(".tar.xz");
 
         // Act
         await lzmaCompressor.Compress(lzmaPath, emptyThreads);
         await gzipCompressor.Compress(gzipPath, emptyThreads);
+        await xzCompressor.Compress(xzPath, emptyThreads);
 
         // Assert
         File.Exists(lzmaPath).Should().BeTrue();
         File.Exists(gzipPath).Should().BeTrue();
+        File.Exists(xzPath).Should().BeTrue();
 
         // Empty archives should still have some size (compression headers)
         new FileInfo(lzmaPath).Length.Should().BeGreaterThan(0);
         new FileInfo(gzipPath).Length.Should().BeGreaterThan(0);
+        new FileInfo(xzPath).Length.Should().BeGreaterThan(0);
     }
 
     [Fact]
@@ -237,27 +336,66 @@ public class CompressionTests : IDisposable
         // Arrange
         var lzmaCompressor = new LZMACompressor();
         var gzipCompressor = new TarGzipCompressor();
+        var xzCompressor = new TarXzCompressor();
         var threads = CreateTestThreads();
         var lzmaPath = CreateTempFilePath(".tar.lzma");
         var gzipPath = CreateTempFilePath(".tar.gz");
+        var xzPath = CreateTempFilePath(".tar.xz");
 
         // Act
         await lzmaCompressor.Compress(lzmaPath, threads);
         await gzipCompressor.Compress(gzipPath, threads);
+        await xzCompressor.Compress(xzPath, threads);
 
         // Assert
         File.Exists(lzmaPath).Should().BeTrue();
         File.Exists(gzipPath).Should().BeTrue();
+        File.Exists(xzPath).Should().BeTrue();
 
         var lzmaSize = new FileInfo(lzmaPath).Length;
         var gzipSize = new FileInfo(gzipPath).Length;
+        var xzSize = new FileInfo(xzPath).Length;
 
         // Both should create valid files
         lzmaSize.Should().BeGreaterThan(0);
         gzipSize.Should().BeGreaterThan(0);
+        xzSize.Should().BeGreaterThan(0);
 
         // Sizes should be different (exact comparison depends on content)
         Math.Abs(lzmaSize - gzipSize).Should().BeGreaterThan(0);
+        Math.Abs(lzmaSize - xzSize).Should().BeGreaterThan(0);
+        Math.Abs(gzipSize - xzSize).Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public async Task TarXzCompressor_WithLargeContent_ShouldCompressCompleteFile()
+    {
+        // Arrange
+        var compressor = new TarXzCompressor();
+        var largeContent = new string('A', 1024 * 1024); // 1MB of repetitive data
+        var largeMessage = CreateTestMessageBlob("Large Test Message", "sender@example.com", largeContent);
+
+        var threads = new Dictionary<ulong, List<MessageBlob>>
+        {
+            { 123456789, new List<MessageBlob> { largeMessage } }
+        };
+        var outputPath = CreateTempFilePath(".tar.xz");
+
+        // Act
+        await compressor.Compress(outputPath, threads);
+
+        // Assert
+        File.Exists(outputPath).Should().BeTrue();
+        var fileInfo = new FileInfo(outputPath);
+        fileInfo.Length.Should().BeGreaterThan(0);
+
+        // XZ compression should achieve significant compression on repetitive data
+        // The compressed size should be much smaller than the original (less than 1% for repetitive data)
+        fileInfo.Length.Should().BeLessThan(largeMessage.Size / 100); // Should be less than 1% of original size
+
+        // Verify the compressed file is not truncated at 500KB
+        // If it was truncated, we'd expect the decompressed content to be incomplete
+        VerifyTarXzArchiveContent(outputPath, threads);
     }
 
     private Dictionary<ulong, List<IMessageSummary>> CreateTestStreamingThreads()
@@ -318,6 +456,40 @@ public class CompressionTests : IDisposable
         // Should have directory entries for each thread
         foundEntries.Should().Contain(name => name.Contains("123456789"));
         foundEntries.Should().Contain(name => name.Contains("987654321"));
+
+        // Should have message files
+        foundEntries.Should().Contain(name => name.EndsWith(".eml"));
+    }
+
+    private void VerifyTarXzArchiveContent(string xzPath, Dictionary<ulong, List<MessageBlob>> originalThreads)
+    {
+        // TarXzCompressor now uses true XZ format with Joveler.Compression.XZ
+        // Decompress using XZ stream and then read tar contents
+        using var fileStream = File.OpenRead(xzPath);
+        using var decompressedStream = new MemoryStream();
+
+        // Use Joveler.Compression.XZ to decompress
+        var decompressOptions = new XZDecompressOptions();
+        using var xzStream = new XZStream(fileStream, decompressOptions);
+        xzStream.CopyTo(decompressedStream);
+
+        // Now read the decompressed tar content
+        decompressedStream.Position = 0;
+        using var tarStream = new TarInputStream(decompressedStream, System.Text.Encoding.UTF8);
+
+        var foundEntries = new List<string>();
+        TarEntry? entry;
+
+        while ((entry = tarStream.GetNextEntry()) != null)
+        {
+            foundEntries.Add(entry.Name);
+        }
+
+        // Verify that all original thread IDs are present
+        foreach (var threadId in originalThreads.Keys)
+        {
+            foundEntries.Should().Contain(name => name.Contains(threadId.ToString()));
+        }
 
         // Should have message files
         foundEntries.Should().Contain(name => name.EndsWith(".eml"));
