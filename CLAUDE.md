@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a .NET 9.0 command-line tool for extracting Gmail email threads using IMAP. It downloads complete email threads based on search queries or labels and saves them as compressed tar.lzma archives using 7zip LZMA compression.
+This is a .NET 9.0 command-line tool for extracting Gmail email threads using IMAP. It downloads complete email threads based on search queries or labels and saves them as compressed archives using LZMA, XZ, or Gzip compression formats.
 
 ## Development Commands
 
@@ -17,13 +17,13 @@ dotnet build
 ### Running the application
 
 ```bash
-dotnet run --project .\src\GMailThreadExtractor\ --email <email> --password <app_password> --search "<search_terms>" --output <output_file> --compression <lzma|gzip> --timeout <minutes> --max-message-size <MB>
+dotnet run --project .\src\GMailThreadExtractor\ --email <email> --password <app_password> --search "<search_terms>" --output <output_file> --compression <lzma|xz|gzip> --timeout <minutes> --max-message-size <MB>
 ```
 
 **Parameters:**
 - `--email` and `--password` - Optional (user will be prompted if not provided)
 - `--search` and `--output` - Required
-- `--compression` - Optional (defaults to "lzma", case-insensitive: accepts "lzma", "LZMA", "gzip", "GZIP", etc.)
+- `--compression` - Optional (defaults to "lzma", case-insensitive: accepts "lzma", "LZMA", "xz", "XZ", "gzip", "GZIP", etc.)
 - `--timeout` - Optional (defaults to 5 minutes, range: 1-60 minutes)
 - `--max-message-size` - Optional (defaults to 10 MB, range: 1-1000 MB)
 
@@ -58,7 +58,7 @@ Example config file format:
 ```
 
 **Configuration Fields:**
-- `compression` - Case-insensitive, accepts "lzma", "LZMA", "gzip", "GZIP", etc. (defaults to "lzma")
+- `compression` - Case-insensitive, accepts "lzma", "LZMA", "xz", "XZ", "gzip", "GZIP", etc. (defaults to "lzma")
 - `timeoutMinutes` - IMAP operation timeout (1-60 minutes, defaults to 5) to prevent hanging on slow networks
 - `maxMessageSizeMB` - Streaming threshold for large messages (1-1000 MB, defaults to 10) to optimize memory usage
 - `email` - Gmail address (validated for proper email format)
@@ -67,7 +67,7 @@ Example config file format:
 - `label` - Gmail label to filter by
 - `output` - Output file path (validated for directory existence and filename safety)
 
-The appropriate file extension (.tar.lzma or .tar.gz) will be automatically appended to the output filename if not already present. Configuration supports JSON comments and trailing commas for convenience.
+The appropriate file extension (.tar.lzma, .tar.xz, or .tar.gz) will be automatically appended to the output filename if not already present. Configuration supports JSON comments and trailing commas for convenience.
 
 ### Solution structure
 
@@ -91,6 +91,7 @@ The solution contains three main projects:
    - `ICompressor.cs` - Interface defining the compression contract for all compressor implementations
    - `BaseCompressor.cs` - Static methods for writing email threads to tar archives
    - `LZMACompressor.cs` - LZMA compression implementation using SevenZip LZMA encoder (implements ICompressor)
+   - `TarXzCompressor.cs` - XZ compression implementation using Joveler.Compression.XZ with true XZ format support (implements ICompressor)
    - `TarGzipCompressor.cs` - Gzip compression implementation using SharpZipLib (implements ICompressor)
    - `MessageWriter.cs` - Converts MailKit messages to MessageBlob objects for serialization
    - `SafeNameBuilder.cs` - Utilities for creating safe file and directory names for tar archives
@@ -106,6 +107,7 @@ The solution contains three main projects:
 - **MimeKit** - Email message parsing and handling
 - **System.CommandLine** (beta) - Command-line argument parsing
 - **LZMA-SDK** - 7zip LZMA compression
+- **Joveler.Compression.XZ** - True XZ format compression with LZMA2 algorithm
 - **SharpZipLib** - Tar archive creation and Gzip compression
 - **Serilog** - Structured logging with console and file output support
 
@@ -116,8 +118,8 @@ The solution contains three main projects:
 3. Searches for emails using Gmail search queries and/or labels
 4. Groups messages by Gmail thread ID
 5. Downloads full message content and converts to `MessageBlob` objects
-6. Selected compressor (LZMA or Gzip) creates tar archive and applies compression
-7. Output saved as `.tar.lzma` or `.tar.gz` file (based on compression setting)
+6. Selected compressor (LZMA, XZ, or Gzip) creates tar archive and applies compression
+7. Output saved as `.tar.lzma`, `.tar.xz`, or `.tar.gz` file (based on compression setting)
 
 ### Security Features
 
@@ -141,6 +143,7 @@ The solution contains three main projects:
 - Each thread is stored in a separate folder within the tar archive
 - File naming convention: `{uniqueId}_{subject}_{timestamp}_{sender}.eml` for individual messages
 - LZMA compression uses 64MB dictionary size and BT4 match finder for optimal compression
+- XZ compression uses LZMA2 algorithm with Level 9 compression for maximum efficiency and true XZ format compliance
 - Gzip compression uses level 9 (best compression) for tar.gz output format
 - Compression method selection is case-insensitive via `--compression` option or config file
 - File extensions are automatically appended based on compression method
@@ -153,7 +156,7 @@ The solution includes comprehensive unit and integration tests:
 ### Test Projects
 
 - **ArchivalSupport.Tests** (`test/ArchivalSupport.Tests/`) - Tests for archival and compression components
-  - `CompressionTests.cs` - LZMA and Gzip compression algorithm tests
+  - `CompressionTests.cs` - LZMA, XZ, and Gzip compression algorithm tests with native library platform detection
   - `MessageWriterTests.cs` - Email message serialization and blob creation tests
 
 - **GMailThreadExtractor.Tests** (`test/GMailThreadExtractor.Tests/`) - Tests for main application components
@@ -165,11 +168,12 @@ The solution includes comprehensive unit and integration tests:
 
 ### Test Coverage
 
-- **120 total tests** with 100% pass rate
+- **126 total tests** with 100% pass rate
 - Configuration validation (email format, compression options, file paths)
 - Error handling strategies (LogAndContinue, LogAndThrow, LogAndTerminate)
 - Retry logic for various exception types (network, timeout, authentication)
-- Compression algorithms (LZMA, Gzip) with realistic email data
+- Compression algorithms (LZMA, XZ, Gzip) with realistic email data and large content validation
+- XZ native library platform detection and initialization for Windows/Linux/macOS
 - Secure file operations (Windows ACLs, Unix permissions)
 - Memory management (streaming vs in-memory message processing)
 - Safe filename generation and filesystem compatibility
