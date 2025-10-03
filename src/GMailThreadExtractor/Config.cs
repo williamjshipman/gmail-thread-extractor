@@ -36,7 +36,7 @@ namespace GMailThreadExtractor
         public string? Output { get; set; }
 
         /// <summary>
-        /// The compression method to use (lzma or gzip).
+        /// The compression method to use (lzma, gzip, xz, or bzip2).
         /// </summary>
         public string? Compression { get; set; }
 
@@ -175,7 +175,7 @@ namespace GMailThreadExtractor
             if (string.IsNullOrWhiteSpace(Compression))
                 return; // Will use default
 
-            var validCompressions = new[] { "lzma", "gzip", "xz" };
+            var validCompressions = new[] { "lzma", "gzip", "xz", "bzip2" };
             if (!validCompressions.Contains(Compression.ToLowerInvariant()))
             {
                 throw new ArgumentException($"Compression method must be one of: {string.Join(", ", validCompressions)}");

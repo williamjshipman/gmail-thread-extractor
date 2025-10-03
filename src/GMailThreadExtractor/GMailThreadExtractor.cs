@@ -187,6 +187,7 @@ namespace GMailThreadExtractor
                 {
                     "gzip" => ".tar.gz",
                     "xz" => ".tar.xz",
+                    "bzip2" => ".tar.bz2",
                     _ => ".tar.lzma" // Default to LZMA
                 };
 
@@ -218,6 +219,9 @@ namespace GMailThreadExtractor
                         break;
                     case "xz":
                         compressor = new TarXzCompressor();
+                        break;
+                    case "bzip2":
+                        compressor = new TarBzip2Compressor();
                         break;
                     case "lzma":
                     default:

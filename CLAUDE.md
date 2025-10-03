@@ -17,13 +17,13 @@ dotnet build
 ### Running the application
 
 ```bash
-dotnet run --project .\src\GMailThreadExtractor\ --email <email> --password <app_password> --search "<search_terms>" --output <output_file> --compression <lzma|xz|gzip> --timeout <minutes> --max-message-size <MB>
+dotnet run --project .\src\GMailThreadExtractor\ --email <email> --password <app_password> --search "<search_terms>" --output <output_file> --compression <lzma|xz|gzip|bzip2> --timeout <minutes> --max-message-size <MB>
 ```
 
 **Parameters:**
 - `--email` and `--password` - Optional (user will be prompted if not provided)
 - `--search` and `--output` - Required
-- `--compression` - Optional (defaults to "lzma", case-insensitive: accepts "lzma", "LZMA", "xz", "XZ", "gzip", "GZIP", etc.)
+- `--compression` - Optional (defaults to "lzma", case-insensitive: accepts "lzma", "LZMA", "xz", "XZ", "gzip", "GZIP", "bzip2", "BZIP2", etc.)
 - `--timeout` - Optional (defaults to 5 minutes, range: 1-60 minutes)
 - `--max-message-size` - Optional (defaults to 10 MB, range: 1-1000 MB)
 
@@ -58,7 +58,7 @@ Example config file format:
 ```
 
 **Configuration Fields:**
-- `compression` - Case-insensitive, accepts "lzma", "LZMA", "xz", "XZ", "gzip", "GZIP", etc. (defaults to "lzma")
+- `compression` - Case-insensitive, accepts "lzma", "LZMA", "xz", "XZ", "gzip", "GZIP", "bzip2", "BZIP2", etc. (defaults to "lzma")
 - `timeoutMinutes` - IMAP operation timeout (1-60 minutes, defaults to 5) to prevent hanging on slow networks
 - `maxMessageSizeMB` - Streaming threshold for large messages (1-1000 MB, defaults to 10) to optimize memory usage
 - `email` - Gmail address (validated for proper email format)
@@ -93,6 +93,7 @@ The solution contains three main projects:
    - `LZMACompressor.cs` - LZMA compression implementation using SevenZip LZMA encoder (implements ICompressor)
    - `TarXzCompressor.cs` - XZ compression implementation using Joveler.Compression.XZ with true XZ format support (implements ICompressor)
    - `TarGzipCompressor.cs` - Gzip compression implementation using SharpZipLib (implements ICompressor)
+   - `TarBzip2Compressor.cs` - BZip2 compression implementation using SharpZipLib with maximum compression (implements ICompressor)
    - `MessageWriter.cs` - Converts MailKit messages to MessageBlob objects for serialization
    - `SafeNameBuilder.cs` - Utilities for creating safe file and directory names for tar archives
 
@@ -156,7 +157,7 @@ The solution includes comprehensive unit and integration tests:
 ### Test Projects
 
 - **ArchivalSupport.Tests** (`test/ArchivalSupport.Tests/`) - Tests for archival and compression components
-  - `CompressionTests.cs` - LZMA, XZ, and Gzip compression algorithm tests with native library platform detection
+  - `CompressionTests.cs` - LZMA, XZ, Gzip, and BZip2 compression algorithm tests with native library platform detection
   - `MessageWriterTests.cs` - Email message serialization and blob creation tests
 
 - **GMailThreadExtractor.Tests** (`test/GMailThreadExtractor.Tests/`) - Tests for main application components
