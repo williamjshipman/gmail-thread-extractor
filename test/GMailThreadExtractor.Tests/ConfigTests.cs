@@ -231,12 +231,13 @@ public class ConfigTests : IDisposable
     [Fact]
     public void Validate_WithInvalidOutputPath_ShouldThrow()
     {
-        // Arrange
-        var config = new Config { Output = "invalid<>path" };
+        // Arrange - Use null character which is invalid in filenames on all platforms
+        var config = new Config { Output = "invalid\0path" };
 
         // Act & Assert
         var act = () => config.Validate();
-        act.Should().Throw<ArgumentException>().WithMessage("*invalid characters*");
+        act.Should().Throw<ArgumentException>()
+            .Where(ex => ex.Message.Contains("Null character") || ex.Message.Contains("invalid characters"));
     }
 
     [Fact]
