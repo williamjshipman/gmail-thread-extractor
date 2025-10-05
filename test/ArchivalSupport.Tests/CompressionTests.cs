@@ -4,11 +4,13 @@ using System.IO;
 using System.Threading.Tasks;
 using ICSharpCode.SharpZipLib.Tar;
 using ICSharpCode.SharpZipLib.GZip;
+using ICSharpCode.SharpZipLib.BZip2;
 using MailKit;
 using MimeKit;
 using Moq;
 using FluentAssertions;
 using ArchivalSupport;
+using Joveler.Compression.XZ;
 
 namespace ArchivalSupport.Tests;
 
@@ -16,6 +18,48 @@ public class CompressionTests : IDisposable
 {
     private readonly string _testDirectory;
     private readonly List<string> _tempFiles;
+
+    static CompressionTests()
+    {
+        // Initialize Joveler.Compression.XZ library for tests with error handling
+        try
+        {
+            // Try to locate the correct native library based on platform
+            var baseDir = Path.GetDirectoryName(typeof(CompressionTests).Assembly.Location);
+            var runtimeDir = Path.Combine(baseDir!, "runtimes");
+
+            string? nativeLibPath = null;
+            if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows))
+            {
+                if (System.Runtime.InteropServices.RuntimeInformation.OSArchitecture == System.Runtime.InteropServices.Architecture.X64)
+                {
+                    nativeLibPath = Path.Combine(runtimeDir, "win-x64", "native", "liblzma.dll");
+                }
+                else if (System.Runtime.InteropServices.RuntimeInformation.OSArchitecture == System.Runtime.InteropServices.Architecture.X86)
+                {
+                    nativeLibPath = Path.Combine(runtimeDir, "win-x86", "native", "liblzma.dll");
+                }
+                else if (System.Runtime.InteropServices.RuntimeInformation.OSArchitecture == System.Runtime.InteropServices.Architecture.Arm64)
+                {
+                    nativeLibPath = Path.Combine(runtimeDir, "win-arm64", "native", "liblzma.dll");
+                }
+            }
+
+            if (nativeLibPath != null && File.Exists(nativeLibPath))
+            {
+                XZInit.GlobalInit(nativeLibPath);
+            }
+            else
+            {
+                XZInit.GlobalInit();
+            }
+        }
+        catch (Exception)
+        {
+            // Re-throw to see the error in tests - the exception message will contain diagnostic info
+            throw;
+        }
+    }
 
     public CompressionTests()
     {
@@ -119,6 +163,26 @@ public class CompressionTests : IDisposable
     }
 
     [Fact]
+    public async Task TarXzCompressor_Compress_ShouldCreateValidArchive()
+    {
+        // Arrange
+        var compressor = new TarXzCompressor();
+        var threads = CreateTestThreads();
+        var outputPath = CreateTempFilePath(".tar.xz");
+
+        // Act
+        await compressor.Compress(outputPath, threads);
+
+        // Assert
+        File.Exists(outputPath).Should().BeTrue();
+        var fileInfo = new FileInfo(outputPath);
+        fileInfo.Length.Should().BeGreaterThan(0);
+
+        // Verify the compressed file structure by decompressing and checking tar content
+        VerifyTarXzArchiveContent(outputPath, threads);
+    }
+
+    [Fact]
     public async Task LZMACompressor_CompressStreaming_ShouldCreateValidArchive()
     {
         // Arrange
@@ -172,26 +236,62 @@ public class CompressionTests : IDisposable
     }
 
     [Fact]
+    public async Task TarXzCompressor_CompressStreaming_ShouldCreateValidArchive()
+    {
+        // Arrange
+        var compressor = new TarXzCompressor();
+        var threads = CreateTestStreamingThreads();
+        var outputPath = CreateTempFilePath(".tar.xz");
+
+        MessageFetcher messageFetcher = async (summary) =>
+        {
+            await Task.Delay(1);
+            return CreateTestMessageBlob(
+                summary.Envelope?.Subject ?? "Test Subject",
+                summary.Envelope?.From?.ToString() ?? "test@example.com",
+                "Streaming message content");
+        };
+
+        // Act
+        await compressor.CompressStreaming(outputPath, threads, messageFetcher);
+
+        // Assert
+        File.Exists(outputPath).Should().BeTrue();
+        var fileInfo = new FileInfo(outputPath);
+        fileInfo.Length.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
     public async Task Compressors_WithEmptyThreads_ShouldCreateEmptyArchive()
     {
         // Arrange
         var lzmaCompressor = new LZMACompressor();
         var gzipCompressor = new TarGzipCompressor();
+        var xzCompressor = new TarXzCompressor();
+        var bzip2Compressor = new TarBzip2Compressor();
         var emptyThreads = new Dictionary<ulong, List<MessageBlob>>();
         var lzmaPath = CreateTempFilePath(".tar.lzma");
         var gzipPath = CreateTempFilePath(".tar.gz");
+        var xzPath = CreateTempFilePath(".tar.xz");
+        var bzip2Path = CreateTempFilePath(".tar.bz2");
 
         // Act
         await lzmaCompressor.Compress(lzmaPath, emptyThreads);
         await gzipCompressor.Compress(gzipPath, emptyThreads);
+        await xzCompressor.Compress(xzPath, emptyThreads);
+        await bzip2Compressor.Compress(bzip2Path, emptyThreads);
 
         // Assert
         File.Exists(lzmaPath).Should().BeTrue();
         File.Exists(gzipPath).Should().BeTrue();
+        File.Exists(xzPath).Should().BeTrue();
+        File.Exists(bzip2Path).Should().BeTrue();
 
         // Empty archives should still have some size (compression headers)
         new FileInfo(lzmaPath).Length.Should().BeGreaterThan(0);
         new FileInfo(gzipPath).Length.Should().BeGreaterThan(0);
+        new FileInfo(xzPath).Length.Should().BeGreaterThan(0);
+        new FileInfo(bzip2Path).Length.Should().BeGreaterThan(0);
     }
 
     [Fact]
@@ -237,27 +337,72 @@ public class CompressionTests : IDisposable
         // Arrange
         var lzmaCompressor = new LZMACompressor();
         var gzipCompressor = new TarGzipCompressor();
+        var xzCompressor = new TarXzCompressor();
+        var bzip2Compressor = new TarBzip2Compressor();
         var threads = CreateTestThreads();
         var lzmaPath = CreateTempFilePath(".tar.lzma");
         var gzipPath = CreateTempFilePath(".tar.gz");
+        var xzPath = CreateTempFilePath(".tar.xz");
+        var bzip2Path = CreateTempFilePath(".tar.bz2");
 
         // Act
         await lzmaCompressor.Compress(lzmaPath, threads);
         await gzipCompressor.Compress(gzipPath, threads);
+        await xzCompressor.Compress(xzPath, threads);
+        await bzip2Compressor.Compress(bzip2Path, threads);
 
         // Assert
         File.Exists(lzmaPath).Should().BeTrue();
         File.Exists(gzipPath).Should().BeTrue();
+        File.Exists(xzPath).Should().BeTrue();
+        File.Exists(bzip2Path).Should().BeTrue();
 
         var lzmaSize = new FileInfo(lzmaPath).Length;
         var gzipSize = new FileInfo(gzipPath).Length;
+        var xzSize = new FileInfo(xzPath).Length;
+        var bzip2Size = new FileInfo(bzip2Path).Length;
 
-        // Both should create valid files
+        // All should create valid files
         lzmaSize.Should().BeGreaterThan(0);
         gzipSize.Should().BeGreaterThan(0);
+        xzSize.Should().BeGreaterThan(0);
+        bzip2Size.Should().BeGreaterThan(0);
 
         // Sizes should be different (exact comparison depends on content)
         Math.Abs(lzmaSize - gzipSize).Should().BeGreaterThan(0);
+        Math.Abs(lzmaSize - xzSize).Should().BeGreaterThan(0);
+        Math.Abs(gzipSize - xzSize).Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public async Task TarXzCompressor_WithLargeContent_ShouldCompressCompleteFile()
+    {
+        // Arrange
+        var compressor = new TarXzCompressor();
+        var largeContent = new string('A', 1024 * 1024); // 1MB of repetitive data
+        var largeMessage = CreateTestMessageBlob("Large Test Message", "sender@example.com", largeContent);
+
+        var threads = new Dictionary<ulong, List<MessageBlob>>
+        {
+            { 123456789, new List<MessageBlob> { largeMessage } }
+        };
+        var outputPath = CreateTempFilePath(".tar.xz");
+
+        // Act
+        await compressor.Compress(outputPath, threads);
+
+        // Assert
+        File.Exists(outputPath).Should().BeTrue();
+        var fileInfo = new FileInfo(outputPath);
+        fileInfo.Length.Should().BeGreaterThan(0);
+
+        // XZ compression should achieve significant compression on repetitive data
+        // The compressed size should be much smaller than the original (less than 1% for repetitive data)
+        fileInfo.Length.Should().BeLessThan(largeMessage.Size / 100); // Should be less than 1% of original size
+
+        // Verify the compressed file is not truncated at 500KB
+        // If it was truncated, we'd expect the decompressed content to be incomplete
+        VerifyTarXzArchiveContent(outputPath, threads);
     }
 
     private Dictionary<ulong, List<IMessageSummary>> CreateTestStreamingThreads()
@@ -287,18 +432,104 @@ public class CompressionTests : IDisposable
 
     private async Task VerifyLZMAArchiveContent(string lzmaPath, Dictionary<ulong, List<MessageBlob>> originalThreads)
     {
-        // For LZMA verification, we would need to decompress and verify content
-        // This is a simplified verification that checks the file exists and has content
-        var fileInfo = new FileInfo(lzmaPath);
-        fileInfo.Length.Should().BeGreaterThan(100); // Should have compressed content
+        // Decompress LZMA and verify tar content using SevenZip decoder
+        using var inputStream = File.OpenRead(lzmaPath);
+        using var decompressedStream = new MemoryStream();
 
-        // Read LZMA header to verify it's a valid LZMA file
-        using var fileStream = File.OpenRead(lzmaPath);
-        var buffer = new byte[13]; // LZMA header size
-        await fileStream.ReadExactlyAsync(buffer);
+        // Use SevenZip LZMA decoder to decompress
+        var decoder = new SevenZip.Compression.LZMA.Decoder();
 
-        // LZMA files should have properties in first 5 bytes
-        buffer.Length.Should().Be(13);
+        // Read LZMA properties (first 5 bytes)
+        var properties = new byte[5];
+        await inputStream.ReadExactlyAsync(properties);
+        decoder.SetDecoderProperties(properties);
+
+        // Read uncompressed size (next 8 bytes)
+        var sizeBytes = new byte[8];
+        await inputStream.ReadExactlyAsync(sizeBytes);
+        long uncompressedSize = BitConverter.ToInt64(sizeBytes, 0);
+
+        // Decompress the LZMA stream
+        decoder.Code(inputStream, decompressedStream, inputStream.Length - 13, uncompressedSize, null);
+
+        // Now read the decompressed tar content and verify both structure and content
+        decompressedStream.Position = 0;
+        using var tarStream = new TarInputStream(decompressedStream, System.Text.Encoding.UTF8);
+
+        var foundFiles = new Dictionary<string, byte[]>();
+        var foundDirectories = new List<string>();
+        TarEntry? entry;
+
+        // Extract all files and directories from the tar archive
+        while ((entry = tarStream.GetNextEntry()) != null)
+        {
+            if (entry.IsDirectory)
+            {
+                foundDirectories.Add(entry.Name);
+            }
+            else
+            {
+                // Read the file content
+                var fileContent = new byte[entry.Size];
+                int totalBytesRead = 0;
+                while (totalBytesRead < entry.Size)
+                {
+                    int bytesRead = tarStream.Read(fileContent, totalBytesRead, (int)(entry.Size - totalBytesRead));
+                    if (bytesRead == 0) break; // End of stream
+                    totalBytesRead += bytesRead;
+                }
+                foundFiles[entry.Name] = fileContent;
+            }
+        }
+
+        // Verify that all original thread IDs are present as directories
+        foreach (var threadId in originalThreads.Keys)
+        {
+            foundDirectories.Should().Contain(name => name.Contains(threadId.ToString()));
+        }
+
+        // Verify that each original message is present with correct content
+        foreach (var thread in originalThreads)
+        {
+            var threadId = thread.Key;
+            var messages = thread.Value;
+
+            foreach (var originalMessage in messages)
+            {
+                // Find the corresponding file in the archive
+                var expectedFileName = foundFiles.Keys.FirstOrDefault(fileName =>
+                    fileName.Contains(threadId.ToString()) &&
+                    fileName.EndsWith(".eml") &&
+                    fileName.Contains(originalMessage.UniqueId));
+
+                expectedFileName.Should().NotBeNull($"Message {originalMessage.UniqueId} should be present in thread {threadId}");
+
+                // Verify the file content matches the original message blob
+                var archivedContent = foundFiles[expectedFileName!];
+                archivedContent.Should().NotBeNull("Archived file content should not be null");
+                archivedContent.Length.Should().BeGreaterThan(0, "Archived file should have content");
+
+                // Compare the actual binary content
+                if (originalMessage.Blob != null)
+                {
+                    archivedContent.Should().Equal(originalMessage.Blob,
+                        $"Content of archived message {originalMessage.UniqueId} should match original blob");
+                }
+                else if (originalMessage.IsStreaming && originalMessage.StreamFunc != null)
+                {
+                    // For streaming messages, we need to get the content via the stream function
+                    using var originalContentStream = new MemoryStream();
+                    await originalMessage.StreamFunc(originalContentStream);
+                    var originalContent = originalContentStream.ToArray();
+
+                    archivedContent.Should().Equal(originalContent,
+                        $"Content of archived streaming message {originalMessage.UniqueId} should match original stream content");
+                }
+            }
+        }
+
+        // Should have message files
+        foundFiles.Keys.Should().Contain(name => name.EndsWith(".eml"), "Archive should contain .eml message files");
     }
 
     private void VerifyTarGzArchiveContent(string gzipPath, Dictionary<ulong, List<MessageBlob>> originalThreads)
@@ -307,19 +538,299 @@ public class CompressionTests : IDisposable
         using var gzipStream = new GZipInputStream(fileStream);
         using var tarStream = new TarInputStream(gzipStream, System.Text.Encoding.UTF8);
 
-        var foundEntries = new List<string>();
+        var foundFiles = new Dictionary<string, byte[]>();
+        var foundDirectories = new List<string>();
         TarEntry? entry;
 
+        // Extract all files and directories from the tar.gz archive
         while ((entry = tarStream.GetNextEntry()) != null)
         {
-            foundEntries.Add(entry.Name);
+            if (entry.IsDirectory)
+            {
+                foundDirectories.Add(entry.Name);
+            }
+            else
+            {
+                // Read the file content
+                var fileContent = new byte[entry.Size];
+                int totalBytesRead = 0;
+                while (totalBytesRead < entry.Size)
+                {
+                    int bytesRead = tarStream.Read(fileContent, totalBytesRead, (int)(entry.Size - totalBytesRead));
+                    if (bytesRead == 0) break; // End of stream
+                    totalBytesRead += bytesRead;
+                }
+                foundFiles[entry.Name] = fileContent;
+            }
         }
 
-        // Should have directory entries for each thread
-        foundEntries.Should().Contain(name => name.Contains("123456789"));
-        foundEntries.Should().Contain(name => name.Contains("987654321"));
+        // Verify that all original thread IDs are present as directories
+        foreach (var threadId in originalThreads.Keys)
+        {
+            foundDirectories.Should().Contain(name => name.Contains(threadId.ToString()));
+        }
+
+        // Verify that each original message is present with correct content
+        foreach (var thread in originalThreads)
+        {
+            var threadId = thread.Key;
+            var messages = thread.Value;
+
+            foreach (var originalMessage in messages)
+            {
+                // Find the corresponding file in the archive
+                var expectedFileName = foundFiles.Keys.FirstOrDefault(fileName =>
+                    fileName.Contains(threadId.ToString()) &&
+                    fileName.EndsWith(".eml") &&
+                    fileName.Contains(originalMessage.UniqueId));
+
+                expectedFileName.Should().NotBeNull($"Message {originalMessage.UniqueId} should be present in thread {threadId}");
+
+                // Verify the file content matches the original message blob
+                var archivedContent = foundFiles[expectedFileName!];
+                archivedContent.Should().NotBeNull("Archived file content should not be null");
+                archivedContent.Length.Should().BeGreaterThan(0, "Archived file should have content");
+
+                // Compare the actual binary content
+                if (originalMessage.Blob != null)
+                {
+                    archivedContent.Should().Equal(originalMessage.Blob,
+                        $"Content of archived message {originalMessage.UniqueId} should match original blob");
+                }
+                else if (originalMessage.IsStreaming && originalMessage.StreamFunc != null)
+                {
+                    // For streaming messages, we need to get the content via the stream function
+                    using var originalContentStream = new MemoryStream();
+                    originalMessage.StreamFunc(originalContentStream).Wait();
+                    var originalContent = originalContentStream.ToArray();
+
+                    archivedContent.Should().Equal(originalContent,
+                        $"Content of archived streaming message {originalMessage.UniqueId} should match original stream content");
+                }
+            }
+        }
 
         // Should have message files
-        foundEntries.Should().Contain(name => name.EndsWith(".eml"));
+        foundFiles.Keys.Should().Contain(name => name.EndsWith(".eml"), "Archive should contain .eml message files");
+    }
+
+    private void VerifyTarXzArchiveContent(string xzPath, Dictionary<ulong, List<MessageBlob>> originalThreads)
+    {
+        // TarXzCompressor now uses true XZ format with Joveler.Compression.XZ
+        // Decompress using XZ stream and then read tar contents
+        using var fileStream = File.OpenRead(xzPath);
+        using var decompressedStream = new MemoryStream();
+
+        // Use Joveler.Compression.XZ to decompress
+        var decompressOptions = new XZDecompressOptions();
+        using var xzStream = new XZStream(fileStream, decompressOptions);
+        xzStream.CopyTo(decompressedStream);
+
+        // Now read the decompressed tar content and verify both structure and content
+        decompressedStream.Position = 0;
+        using var tarStream = new TarInputStream(decompressedStream, System.Text.Encoding.UTF8);
+
+        var foundFiles = new Dictionary<string, byte[]>();
+        var foundDirectories = new List<string>();
+        TarEntry? entry;
+
+        // Extract all files and directories from the tar archive
+        while ((entry = tarStream.GetNextEntry()) != null)
+        {
+            if (entry.IsDirectory)
+            {
+                foundDirectories.Add(entry.Name);
+            }
+            else
+            {
+                // Read the file content
+                var fileContent = new byte[entry.Size];
+                int totalBytesRead = 0;
+                while (totalBytesRead < entry.Size)
+                {
+                    int bytesRead = tarStream.Read(fileContent, totalBytesRead, (int)(entry.Size - totalBytesRead));
+                    if (bytesRead == 0) break; // End of stream
+                    totalBytesRead += bytesRead;
+                }
+                foundFiles[entry.Name] = fileContent;
+            }
+        }
+
+        // Verify that all original thread IDs are present as directories
+        foreach (var threadId in originalThreads.Keys)
+        {
+            foundDirectories.Should().Contain(name => name.Contains(threadId.ToString()));
+        }
+
+        // Verify that each original message is present with correct content
+        foreach (var thread in originalThreads)
+        {
+            var threadId = thread.Key;
+            var messages = thread.Value;
+
+            foreach (var originalMessage in messages)
+            {
+                // Find the corresponding file in the archive
+                var expectedFileName = foundFiles.Keys.FirstOrDefault(fileName =>
+                    fileName.Contains(threadId.ToString()) &&
+                    fileName.EndsWith(".eml") &&
+                    fileName.Contains(originalMessage.UniqueId));
+
+                expectedFileName.Should().NotBeNull($"Message {originalMessage.UniqueId} should be present in thread {threadId}");
+
+                // Verify the file content matches the original message blob
+                var archivedContent = foundFiles[expectedFileName!];
+                archivedContent.Should().NotBeNull("Archived file content should not be null");
+                archivedContent.Length.Should().BeGreaterThan(0, "Archived file should have content");
+
+                // Compare the actual binary content
+                if (originalMessage.Blob != null)
+                {
+                    archivedContent.Should().Equal(originalMessage.Blob,
+                        $"Content of archived message {originalMessage.UniqueId} should match original blob");
+                }
+                else if (originalMessage.IsStreaming && originalMessage.StreamFunc != null)
+                {
+                    // For streaming messages, we need to get the content via the stream function
+                    using var originalContentStream = new MemoryStream();
+                    originalMessage.StreamFunc(originalContentStream).Wait();
+                    var originalContent = originalContentStream.ToArray();
+
+                    archivedContent.Should().Equal(originalContent,
+                        $"Content of archived streaming message {originalMessage.UniqueId} should match original stream content");
+                }
+            }
+        }
+
+        // Should have message files
+        foundFiles.Keys.Should().Contain(name => name.EndsWith(".eml"), "Archive should contain .eml message files");
+    }
+
+    [Fact]
+    public async Task TarBzip2Compressor_Compress_ShouldCreateValidArchive()
+    {
+        // Arrange
+        var compressor = new TarBzip2Compressor();
+        var threads = CreateTestThreads();
+        var outputPath = CreateTempFilePath(".tar.bz2");
+
+        // Act
+        await compressor.Compress(outputPath, threads);
+
+        // Assert
+        File.Exists(outputPath).Should().BeTrue();
+        var fileInfo = new FileInfo(outputPath);
+        fileInfo.Length.Should().BeGreaterThan(0);
+
+        // Verify content integrity
+        VerifyTarBzip2ArchiveContent(outputPath, threads);
+    }
+
+    [Fact]
+    public async Task TarBzip2Compressor_CompressStreaming_ShouldCreateValidArchive()
+    {
+        // Arrange
+        var compressor = new TarBzip2Compressor();
+        var threads = CreateTestStreamingThreads();
+        var outputPath = CreateTempFilePath(".tar.bz2");
+
+        MessageFetcher messageFetcher = async (summary) =>
+        {
+            await Task.Delay(1);
+            return CreateTestMessageBlob(
+                summary.Envelope?.Subject ?? "Test Subject",
+                summary.Envelope?.From?.ToString() ?? "test@example.com",
+                "Streaming message content");
+        };
+
+        // Act
+        await compressor.CompressStreaming(outputPath, threads, messageFetcher);
+
+        // Assert
+        File.Exists(outputPath).Should().BeTrue();
+        var fileInfo = new FileInfo(outputPath);
+        fileInfo.Length.Should().BeGreaterThan(0);
+    }
+
+    private void VerifyTarBzip2ArchiveContent(string bzip2Path, Dictionary<ulong, List<MessageBlob>> originalThreads)
+    {
+        using var fileStream = File.OpenRead(bzip2Path);
+        using var bzip2Stream = new BZip2InputStream(fileStream);
+        using var tarStream = new TarInputStream(bzip2Stream, System.Text.Encoding.UTF8);
+
+        var foundFiles = new Dictionary<string, byte[]>();
+        var foundDirectories = new List<string>();
+        TarEntry? entry;
+
+        // Extract all files and directories from the tar.bz2 archive
+        while ((entry = tarStream.GetNextEntry()) != null)
+        {
+            if (entry.IsDirectory)
+            {
+                foundDirectories.Add(entry.Name);
+            }
+            else
+            {
+                // Read the file content
+                var fileContent = new byte[entry.Size];
+                int totalBytesRead = 0;
+                while (totalBytesRead < entry.Size)
+                {
+                    int bytesRead = tarStream.Read(fileContent, totalBytesRead, (int)(entry.Size - totalBytesRead));
+                    if (bytesRead == 0) break; // End of stream
+                    totalBytesRead += bytesRead;
+                }
+                foundFiles[entry.Name] = fileContent;
+            }
+        }
+
+        // Verify that all original thread IDs are present as directories
+        foreach (var threadId in originalThreads.Keys)
+        {
+            foundDirectories.Should().Contain(name => name.Contains(threadId.ToString()));
+        }
+
+        // Verify that each original message is present with correct content
+        foreach (var thread in originalThreads)
+        {
+            var threadId = thread.Key;
+            var messages = thread.Value;
+
+            foreach (var originalMessage in messages)
+            {
+                // Find the corresponding file in the archive
+                var expectedFileName = foundFiles.Keys.FirstOrDefault(fileName =>
+                    fileName.Contains(threadId.ToString()) &&
+                    fileName.EndsWith(".eml") &&
+                    fileName.Contains(originalMessage.UniqueId));
+
+                expectedFileName.Should().NotBeNull($"Message {originalMessage.UniqueId} should be present in thread {threadId}");
+
+                // Verify the file content matches the original message blob
+                var archivedContent = foundFiles[expectedFileName!];
+                archivedContent.Should().NotBeNull("Archived file content should not be null");
+                archivedContent.Length.Should().BeGreaterThan(0, "Archived file should have content");
+
+                // Compare the actual binary content
+                if (originalMessage.Blob != null)
+                {
+                    archivedContent.Should().Equal(originalMessage.Blob,
+                        $"Content of archived message {originalMessage.UniqueId} should match original blob");
+                }
+                else if (originalMessage.IsStreaming && originalMessage.StreamFunc != null)
+                {
+                    // For streaming messages, we need to get the content via the stream function
+                    using var originalContentStream = new MemoryStream();
+                    originalMessage.StreamFunc(originalContentStream).Wait();
+                    var originalContent = originalContentStream.ToArray();
+
+                    archivedContent.Should().Equal(originalContent,
+                        $"Content of archived streaming message {originalMessage.UniqueId} should match original stream content");
+                }
+            }
+        }
+
+        // Should have message files
+        foundFiles.Keys.Should().Contain(name => name.EndsWith(".eml"), "Archive should contain .eml message files");
     }
 }

@@ -60,7 +60,7 @@ namespace GMailThreadExtractor
             };
             var compressionOption = new Option<string>(
                 name: "--compression",
-                description: "The compression method to use (lzma or gzip). Default is lzma.")
+                description: "The compression method to use (lzma, gzip, xz, or bzip2). Default is lzma.")
             {
                 IsRequired = false
             };
@@ -69,9 +69,11 @@ namespace GMailThreadExtractor
                 var value = result.GetValueOrDefault<string>();
                 if (!string.IsNullOrEmpty(value) &&
                     !string.Equals(value, "lzma", StringComparison.OrdinalIgnoreCase) &&
-                    !string.Equals(value, "gzip", StringComparison.OrdinalIgnoreCase))
+                    !string.Equals(value, "gzip", StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(value, "xz", StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(value, "bzip2", StringComparison.OrdinalIgnoreCase))
                 {
-                    result.ErrorMessage = "Compression method must be either 'lzma' or 'gzip'.";
+                    result.ErrorMessage = "Compression method must be one of 'lzma', 'gzip', 'xz', or 'bzip2'.";
                 }
             });
             var timeoutOption = new Option<int?>(

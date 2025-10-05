@@ -157,6 +157,12 @@ public class ConfigTests : IDisposable
     [InlineData("gzip")]
     [InlineData("GZIP")]
     [InlineData("Gzip")]
+    [InlineData("xz")]
+    [InlineData("XZ")]
+    [InlineData("Xz")]
+    [InlineData("bzip2")]
+    [InlineData("BZIP2")]
+    [InlineData("Bzip2")]
     public void Validate_WithValidCompressionCaseInsensitive_ShouldNotThrow(string compression)
     {
         // Arrange
@@ -182,8 +188,8 @@ public class ConfigTests : IDisposable
     }
 
     [Theory]
-    [InlineData("invalid", "Compression method must be one of: lzma, gzip")]
-    [InlineData("zip", "Compression method must be one of: lzma, gzip")]
+    [InlineData("invalid", "Compression method must be one of: lzma, gzip, xz, bzip2")]
+    [InlineData("zip", "Compression method must be one of: lzma, gzip, xz, bzip2")]
     public void Validate_WithInvalidCompression_ShouldThrow(string compression, string expectedMessage)
     {
         // Arrange
@@ -225,12 +231,13 @@ public class ConfigTests : IDisposable
     [Fact]
     public void Validate_WithInvalidOutputPath_ShouldThrow()
     {
-        // Arrange
-        var config = new Config { Output = "invalid<>path" };
+        // Arrange - Use null character which is invalid in filenames on all platforms
+        var config = new Config { Output = "invalid\0path" };
 
         // Act & Assert
         var act = () => config.Validate();
-        act.Should().Throw<ArgumentException>().WithMessage("*invalid characters*");
+        act.Should().Throw<ArgumentException>()
+            .Where(ex => ex.Message.Contains("Null character") || ex.Message.Contains("invalid characters"));
     }
 
     [Fact]
