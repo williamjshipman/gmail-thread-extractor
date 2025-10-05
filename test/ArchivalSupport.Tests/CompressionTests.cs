@@ -47,22 +47,17 @@ public class CompressionTests : IDisposable
 
             if (nativeLibPath != null && File.Exists(nativeLibPath))
             {
-                System.Console.WriteLine($"Attempting to initialize XZ with library at: {nativeLibPath}");
                 XZInit.GlobalInit(nativeLibPath);
             }
             else
             {
-                System.Console.WriteLine($"Native library path not found or doesn't exist: {nativeLibPath}");
-                System.Console.WriteLine("Trying default initialization...");
                 XZInit.GlobalInit();
             }
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            // Log the specific error but don't fail static initialization
-            System.Console.WriteLine($"XZ initialization failed: {ex.Message}");
-            System.Console.WriteLine($"Stack trace: {ex.StackTrace}");
-            throw; // Re-throw to see the error in tests
+            // Re-throw to see the error in tests - the exception message will contain diagnostic info
+            throw;
         }
     }
 

@@ -7,6 +7,7 @@ using FluentAssertions;
 using Serilog;
 using Serilog.Events;
 using Shared;
+using Xunit.Abstractions;
 
 namespace GMailThreadExtractor.Tests;
 
@@ -17,9 +18,11 @@ public class LoggingConfigurationTests : IDisposable
 {
     private readonly string _testDirectory;
     private readonly List<string> _tempFiles;
+    private readonly ITestOutputHelper _testOutput;
 
-    public LoggingConfigurationTests()
+    public LoggingConfigurationTests(ITestOutputHelper testOutput)
     {
+        _testOutput = testOutput;
         _testDirectory = Path.Combine(Path.GetTempPath(), $"logging_tests_{Guid.NewGuid():N}");
         Directory.CreateDirectory(_testDirectory);
         _tempFiles = new List<string>();
@@ -32,11 +35,21 @@ public class LoggingConfigurationTests : IDisposable
         {
             LoggingConfiguration.CloseAndFlush();
         }
-        catch { /* Ignore errors during cleanup */ }
+        catch (Exception ex)
+        {
+            _testOutput.WriteLine($"Error during Dispose: {ex.Message}");
+        }
 
         foreach (var file in _tempFiles.Where(File.Exists))
         {
-            try { File.Delete(file); } catch { /* Ignore cleanup errors */ }
+            try
+            {
+                File.Delete(file);
+            }
+            catch (Exception ex)
+            {
+                _testOutput.WriteLine($"Error deleting temp file {file}: {ex.Message}");
+            }
         }
 
         // Try to delete all log files in test directory
@@ -46,11 +59,21 @@ public class LoggingConfigurationTests : IDisposable
             {
                 foreach (var file in Directory.GetFiles(_testDirectory, "*.log", SearchOption.AllDirectories))
                 {
-                    try { File.Delete(file); } catch { /* Ignore cleanup errors */ }
+                    try
+                    {
+                        File.Delete(file);
+                    }
+                    catch (Exception ex)
+                    {
+                        _testOutput.WriteLine($"Error deleting log file {file}: {ex.Message}");
+                    }
                 }
                 Directory.Delete(_testDirectory, true);
             }
-            catch { /* Ignore cleanup errors */ }
+            catch (Exception ex)
+            {
+                _testOutput.WriteLine($"Error deleting test directory {_testDirectory}: {ex.Message}");
+            }
         }
 
         // Reset the logger field using reflection for test isolation
