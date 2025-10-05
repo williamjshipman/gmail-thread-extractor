@@ -51,7 +51,7 @@ cd gmail-thread-extractor
 2. Run the project with the following command:
 
 ```bash
-dotnet run --project .\src\GMailThreadExtractor\ --email <email> --password <app password> --search "<search terms>" --output <output file> --compression <lzma|xz|gzip> --timeout <minutes> --max-message-size <MB>
+dotnet run --project .\src\GMailThreadExtractor\ --email <email> --password <app password> --search "<search terms>" --output <output file> --compression <lzma|xz|gzip|bzip2> --timeout <minutes> --max-message-size <MB>
 ```
 
 Replace `<email>` with your GMail email address, `<app password>` with the app password you generated, `<search terms>` with the search terms you want to use to find the thread, and `<output file>` with the path to the file where you want to save the threads that were found.
@@ -59,7 +59,7 @@ Replace `<email>` with your GMail email address, `<app password>` with the app p
 **Arguments:**
 - `--email` and `--password` are optional (you will be prompted if not provided)
 - `--search` and `--output` are required
-- `--compression` is optional (defaults to "lzma", case-insensitive) - choose "lzma" for .tar.lzma, "xz" for .tar.xz, or "gzip" for .tar.gz
+- `--compression` is optional (defaults to "lzma", case-insensitive) - choose "lzma" for .tar.lzma, "xz" for .tar.xz, "gzip" for .tar.gz, or "bzip2" for .tar.bz2
 - `--config` is optional - specify a JSON configuration file path
 - `--label` is optional - filter by Gmail label
 - `--timeout` is optional (defaults to 5 minutes, range: 1-60 minutes) - IMAP operation timeout
@@ -82,11 +82,11 @@ dotnet test --verbosity normal
 ```
 
 **Test Coverage:**
-- **126 total tests** with 100% pass rate
+- **131 total tests** with 100% pass rate
 - Configuration validation and error handling
 - Retry logic with exponential backoff
 - Cross-platform secure file operations
-- Compression algorithms (LZMA, XZ with native library detection, Gzip)
+- Compression algorithms (LZMA, XZ with native library detection, Gzip, BZip2)
 - Memory management and streaming
 - Error categorization and recovery strategies
 - Integration workflows with mock data
@@ -130,8 +130,8 @@ dotnet run --project .\src\GMailThreadExtractor\ --config config.json
 ## Features
 
 :white_check_mark: Download all email threads that match search terms and/or labels from your GMail account\
-:white_check_mark: Save messages as .eml files in compressed archives (tar.lzma, tar.xz, or tar.gz)\
-:white_check_mark: Multiple compression options: LZMA (64MB dictionary), XZ (LZMA2 Level 9 true format), or Gzip (level 9)\
+:white_check_mark: Save messages as .eml files in compressed archives (tar.lzma, tar.xz, tar.gz, or tar.bz2)\
+:white_check_mark: Multiple compression options: LZMA (64MB dictionary), XZ (LZMA2 Level 9 true format), Gzip (level 9), or BZip2 (maximum compression)\
 :white_check_mark: Each thread organized in separate folders within the archive\
 :white_check_mark: JSON configuration file support with validation and comments support\
 :white_check_mark: Command-line options take precedence over configuration files\
@@ -169,12 +169,12 @@ The project is organized into `src/` and `test/` folders with a clean separation
 
 **Source Projects:**
 - `src/GMailThreadExtractor`: Main executable with CLI, configuration, retry logic, and IMAP operations
-- `src/ArchivalSupport`: Compression (LZMA, XZ, Gzip), archival, and message processing utilities
+- `src/ArchivalSupport`: Compression (LZMA, XZ, Gzip, BZip2), archival, and message processing utilities
 - `src/Shared`: Common infrastructure (logging, error handling, secure file operations)
 
 **Test Projects:**
-- `test/GMailThreadExtractor.Tests`: Comprehensive tests for main application components (96 tests)
-- `test/ArchivalSupport.Tests`: Tests for compression and archival functionality with XZ native library detection (30 tests)
+- `test/GMailThreadExtractor.Tests`: Comprehensive tests for main application components (99 tests)
+- `test/ArchivalSupport.Tests`: Tests for compression and archival functionality with XZ native library detection (32 tests)
 
 **Key Components:**
 - Configuration loading and validation with JSON support
