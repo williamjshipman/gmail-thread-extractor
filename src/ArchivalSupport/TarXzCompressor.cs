@@ -166,17 +166,20 @@ public class TarXzCompressor : ICompressor
             }
 
             // Step 2: Compress TAR with true XZ format using Joveler.Compression.XZ
-            var xzCompressOptions = new XZCompressOptions
+            // Wrap in explicit scope to ensure streams are disposed before finally block
             {
-                Level = LzmaCompLevel.Level9, // Good balance of compression and speed
-                ExtremeFlag = false
-            };
+                var xzCompressOptions = new XZCompressOptions
+                {
+                    Level = LzmaCompLevel.Level9, // Good balance of compression and speed
+                    ExtremeFlag = false
+                };
 
-            using var inputStream = new FileStream(tempTarFilePath, FileMode.Open, FileAccess.Read, FileShare.Read);
-            using var outputStream = new FileStream(outputPath, FileMode.Create, FileAccess.Write, FileShare.None);
-            using var xzStream = new XZStream(outputStream, xzCompressOptions);
+                using var inputStream = new FileStream(tempTarFilePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+                using var outputStream = new FileStream(outputPath, FileMode.Create, FileAccess.Write, FileShare.None);
+                using var xzStream = new XZStream(outputStream, xzCompressOptions);
 
-            await inputStream.CopyToAsync(xzStream);
+                await inputStream.CopyToAsync(xzStream);
+            } // Streams disposed here, before finally block
         }
         catch (Exception ex)
         {

@@ -262,6 +262,16 @@ public class IntegrationTests : IDisposable
 
     private Dictionary<ulong, List<ArchivalSupport.MessageBlob>> CreateTestThreadsWithRealisticData()
     {
+        // Create larger, more compressible content to ensure compression differences are measurable
+        var largeRepetitiveContent = string.Join("\n\n", Enumerable.Repeat(
+            "This is a test email message with repetitive content that will compress well. " +
+            "Lorem ipsum dolor sit amet, consectetur adipiscing elit. " +
+            "Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. " +
+            "Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris. " +
+            "The quick brown fox jumps over the lazy dog. " +
+            "Pack my box with five dozen liquor jugs. " +
+            "How vexingly quick daft zebras jump! ", 50));
+
         return new Dictionary<ulong, List<ArchivalSupport.MessageBlob>>
         {
             {
@@ -271,11 +281,11 @@ public class IntegrationTests : IDisposable
                     CreateRealisticMessageBlob(
                         "Project Update - Sprint 42",
                         "project-manager@company.com",
-                        "Hi team,\n\nHere's the update for Sprint 42:\n\n- Feature A completed\n- Bug fixes in progress\n- Next sprint planning scheduled\n\nBest regards,\nPM"),
+                        "Hi team,\n\nHere's the update for Sprint 42:\n\n" + largeRepetitiveContent + "\n\nBest regards,\nPM"),
                     CreateRealisticMessageBlob(
                         "Re: Project Update - Sprint 42",
                         "developer@company.com",
-                        "Thanks for the update! I have a question about Feature A implementation...")
+                        "Thanks for the update! I have a question about Feature A implementation...\n\n" + largeRepetitiveContent)
                 }
             },
             {
@@ -285,7 +295,7 @@ public class IntegrationTests : IDisposable
                     CreateRealisticMessageBlob(
                         "Meeting Notes - Q4 Planning",
                         "ceo@company.com",
-                        "Quarterly planning meeting notes:\n\n1. Budget review\n2. Resource allocation\n3. Strategic initiatives\n\nAction items attached.")
+                        "Quarterly planning meeting notes:\n\n1. Budget review\n2. Resource allocation\n3. Strategic initiatives\n\n" + largeRepetitiveContent + "\n\nAction items attached.")
                 }
             }
         };
