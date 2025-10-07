@@ -398,3 +398,22 @@ FodyWeavers.xsd
 
 # JetBrains Rider
 *.sln.iml
+
+# XZ compression library generated files.
+Joveler.Compression.XZ.Precompiled.Exclude
+
+# Archive files to ignore
+*.tar.gz
+*.tar.xz
+*.tar.lzma
+
+# Private configuration files
+config.json
+
+# Ignore AI tools files
+.serena/
+.claude/
+
+# Ignore unit test results and coverage files
+TestResults/
+coverage-report/
